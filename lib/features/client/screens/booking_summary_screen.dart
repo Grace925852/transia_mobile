@@ -10,11 +10,13 @@ import 'package:transia_mobile/features/client/services/reservation_service.dart
 class BookingSummaryScreen extends StatefulWidget {
   final TrajetModel trajet;
   final int nombreSieges;
+  final List<int>? selectedSeats;
 
   const BookingSummaryScreen({
     super.key,
     required this.trajet,
     required this.nombreSieges,
+    this.selectedSeats,
   });
 
   @override
@@ -27,42 +29,49 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
   late final ReservationService reservationService;
 
   bool isLoading = false;
+
   bool jeFaisPartieDuVoyage = true;
+  bool saisirAutresNoms = false;
 
   String clientName = '';
   String clientUsername = '';
   int? clientNumericUserId;
 
+  late final TextEditingController responsableController;
   late List<TextEditingController> passengerControllers;
 
   @override
   void initState() {
     super.initState();
+
     secureStorageService = SecureStorageService();
     apiClient = ApiClient(secureStorageService);
     reservationService = ReservationService(apiClient: apiClient);
 
-    passengerControllers = List.generate(
-      _nombreChampsPassagers,
-      (_) => TextEditingController(),
-    );
+    responsableController = TextEditingController();
+    passengerControllers = [];
 
+    _rebuildPassengerControllers();
     chargerInfosClient();
-  }
-
-  int get _nombreChampsPassagers {
-    if (widget.nombreSieges <= 0) return 0;
-    return jeFaisPartieDuVoyage
-        ? (widget.nombreSieges - 1).clamp(0, 100)
-        : widget.nombreSieges;
   }
 
   @override
   void dispose() {
+    responsableController.dispose();
     for (final controller in passengerControllers) {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  int get _maxEditableOtherPassengers {
+    if (widget.nombreSieges <= 1) return 0;
+
+    if (jeFaisPartieDuVoyage) {
+      return widget.nombreSieges - 1;
+    }
+
+    return widget.nombreSieges - 1;
   }
 
   void _rebuildPassengerControllers() {
@@ -70,12 +79,16 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
       controller.dispose();
     }
 
+    final count = saisirAutresNoms ? _maxEditableOtherPassengers : 0;
+
     passengerControllers = List.generate(
-      _nombreChampsPassagers,
+      count,
       (_) => TextEditingController(),
     );
 
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> chargerInfosClient() async {
@@ -97,43 +110,108 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+        SnackBar(
+          content: Text(
+            e.toString().replaceAll('Exception: ', ''),
+          ),
+        ),
       );
     }
   }
 
-  List<String> _buildPassengerNames() {
-    final List<String> names = [];
+  String _buildFallbackGuestName({
+    required String responsable,
+    required int numero,
+  }) {
+    return 'Invité N$numero de $responsable';
+  }
 
-    if (jeFaisPartieDuVoyage && clientName.trim().isNotEmpty) {
-      names.add(clientName.trim());
+  List<String> _buildPassengerNames() {
+    if (jeFaisPartieDuVoyage) {
+      final responsible = clientName.trim().isEmpty ? 'Client' : clientName.trim();
+      final List<String> names = [responsible];
+
+      int fallbackIndex = 1;
+      for (final controller in passengerControllers) {
+        final value = controller.text.trim();
+        if (value.isNotEmpty) {
+          names.add(value);
+        } else {
+          names.add(
+            _buildFallbackGuestName(
+              responsable: responsible,
+              numero: fallbackIndex,
+            ),
+          );
+          fallbackIndex++;
+        }
+      }
+
+      while (names.length < widget.nombreSieges) {
+        names.add(
+          _buildFallbackGuestName(
+            responsable: responsible,
+            numero: fallbackIndex,
+          ),
+        );
+        fallbackIndex++;
+      }
+
+      return names;
     }
 
+    final responsible = responsableController.text.trim();
+    if (responsible.isEmpty) {
+      throw Exception('Veuillez renseigner le nom du responsable.');
+    }
+
+    final List<String> names = [responsible];
+
+    int fallbackIndex = 1;
     for (final controller in passengerControllers) {
       final value = controller.text.trim();
       if (value.isNotEmpty) {
         names.add(value);
+      } else {
+        names.add(
+          _buildFallbackGuestName(
+            responsable: responsible,
+            numero: fallbackIndex,
+          ),
+        );
+        fallbackIndex++;
       }
+    }
+
+    while (names.length < widget.nombreSieges) {
+      names.add(
+        _buildFallbackGuestName(
+          responsable: responsible,
+          numero: fallbackIndex,
+        ),
+      );
+      fallbackIndex++;
     }
 
     return names;
   }
 
   String _buildNomResponsable(List<String> passengers) {
-    if (!jeFaisPartieDuVoyage && passengers.isNotEmpty) {
-      return passengers.first;
+    if (jeFaisPartieDuVoyage) {
+      return clientName.trim().isEmpty ? 'Client' : clientName.trim();
     }
 
-    if (clientName.trim().isNotEmpty) {
-      return clientName.trim();
+    if (responsableController.text.trim().isNotEmpty) {
+      return responsableController.text.trim();
     }
 
     if (passengers.isNotEmpty) {
       return passengers.first;
     }
 
-    return 'Client';
+    return 'Responsable';
   }
 
   Future<void> confirmerReservation() async {
@@ -144,17 +222,17 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
         );
       }
 
+      setState(() {
+        isLoading = true;
+      });
+
       final passengers = _buildPassengerNames();
 
       if (passengers.length != widget.nombreSieges) {
         throw Exception(
-          'Veuillez renseigner correctement les noms des passagers.',
+          'Erreur lors de la préparation des noms des passagers.',
         );
       }
-
-      setState(() {
-        isLoading = true;
-      });
 
       final nomResponsable = _buildNomResponsable(passengers);
 
@@ -179,8 +257,13 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
       context.go(AppRoutes.reservations);
     } catch (e) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+        SnackBar(
+          content: Text(
+            e.toString().replaceAll('Exception: ', ''),
+          ),
+        ),
       );
     } finally {
       if (mounted) {
@@ -222,6 +305,134 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     );
   }
 
+  Widget _buildSeatInfo() {
+    final seats = widget.selectedSeats ?? [];
+
+    if (seats.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final sortedSeats = [...seats]..sort();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: _buildRow(
+        'Sièges choisis',
+        sortedSeats.join(', '),
+        highlight: true,
+      ),
+    );
+  }
+
+  Widget _buildPassengerFields() {
+    if (jeFaisPartieDuVoyage) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: saisirAutresNoms,
+            title: const Text('Voulez-vous saisir les autres noms ?'),
+            onChanged: (value) {
+              setState(() {
+                saisirAutresNoms = value;
+              });
+              _rebuildPassengerControllers();
+            },
+          ),
+          if (saisirAutresNoms) ...[
+            const SizedBox(height: 6),
+            ...List.generate(
+              passengerControllers.length,
+              (index) => Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: TextField(
+                  controller: passengerControllers[index],
+                  decoration: InputDecoration(
+                    labelText: 'Autre passager ${index + 1}',
+                    hintText: 'Laisser vide pour générer automatiquement',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (!saisirAutresNoms)
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text(
+                'Les autres billets seront complétés automatiquement avec des noms invités si nécessaire.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: responsableController,
+          decoration: InputDecoration(
+            labelText: 'Nom du responsable',
+            hintText: 'Exemple : AMOUZOU',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: saisirAutresNoms,
+          title: const Text('Voulez-vous saisir les autres noms ?'),
+          onChanged: (value) {
+            setState(() {
+              saisirAutresNoms = value;
+            });
+            _rebuildPassengerControllers();
+          },
+        ),
+        if (saisirAutresNoms) ...[
+          const SizedBox(height: 6),
+          ...List.generate(
+            passengerControllers.length,
+            (index) => Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: TextField(
+                controller: passengerControllers[index],
+                decoration: InputDecoration(
+                  labelText: 'Autre passager ${index + 1}',
+                  hintText: 'Laisser vide pour générer automatiquement',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+        if (!saisirAutresNoms)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              'Si vous ne saisissez pas les autres noms, ils seront générés automatiquement à partir du responsable.',
+              style: TextStyle(
+                fontSize: 13,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final montantTotal = widget.trajet.tarif * widget.nombreSieges;
@@ -260,6 +471,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                 _buildRow('Heure', widget.trajet.heureFormatee),
                 _buildRow('Véhicule', widget.trajet.vehiculeImmatriculation),
                 _buildRow('Nombre de sièges', '${widget.nombreSieges}'),
+                _buildSeatInfo(),
                 _buildRow('Prix unitaire', widget.trajet.prixFormate),
                 _buildRow(
                   'Montant total',
@@ -293,8 +505,10 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                   groupValue: jeFaisPartieDuVoyage,
                   onChanged: (value) {
                     setState(() {
-                      jeFaisPartieDuVoyage = value ?? true;
+                      jeFaisPartieDuVoyage = true;
+                      saisirAutresNoms = false;
                     });
+                    responsableController.clear();
                     _rebuildPassengerControllers();
                   },
                   title: const Text('Je fais partie du voyage'),
@@ -305,7 +519,8 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                   groupValue: jeFaisPartieDuVoyage,
                   onChanged: (value) {
                     setState(() {
-                      jeFaisPartieDuVoyage = value ?? false;
+                      jeFaisPartieDuVoyage = false;
+                      saisirAutresNoms = false;
                     });
                     _rebuildPassengerControllers();
                   },
@@ -345,32 +560,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                if (_nombreChampsPassagers == 0)
-                  const Text(
-                    'Aucun autre passager à renseigner.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF6B7280),
-                    ),
-                  )
-                else
-                  ...List.generate(
-                    passengerControllers.length,
-                    (index) => Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: TextField(
-                        controller: passengerControllers[index],
-                        decoration: InputDecoration(
-                          labelText: jeFaisPartieDuVoyage
-                              ? 'Passager ${index + 2}'
-                              : 'Passager ${index + 1}',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                _buildPassengerFields(),
               ],
             ),
           ),

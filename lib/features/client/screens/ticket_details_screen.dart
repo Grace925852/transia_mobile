@@ -10,34 +10,101 @@ class TicketDetailsScreen extends StatelessWidget {
     required this.reservation,
   });
 
-  List<String> _extractPassengerNames() {
-    final rawBillets = reservation.rawData['billets'];
+  String _safe(String? value, {String fallback = '-'}) {
+    final v = value?.trim() ?? '';
+    return v.isEmpty ? fallback : v;
+  }
 
-    if (rawBillets is List) {
-      return rawBillets
-          .whereType<Map>()
-          .map((e) => (e['nomPassager'] ?? '').toString().trim())
-          .where((name) => name.isNotEmpty)
-          .toList();
+  List<String> _extractRawPassengerNames() {
+    final dynamic billetsData =
+        reservation.rawData['billets'] ?? reservation.rawData['tickets'];
+
+    if (billetsData is List) {
+      return billetsData.map((item) {
+        if (item is Map<String, dynamic>) {
+          return (item['nomPassager'] ??
+                  item['passagerNom'] ??
+                  item['nom'] ??
+                  '')
+              .toString()
+              .trim();
+        }
+
+        if (item is Map) {
+          final map = Map<String, dynamic>.from(item);
+          return (map['nomPassager'] ??
+                  map['passagerNom'] ??
+                  map['nom'] ??
+                  '')
+              .toString()
+              .trim();
+        }
+
+        return '';
+      }).toList();
     }
 
     return [];
   }
 
-  String _buildReservationQrData() {
-    final passengers = _extractPassengerNames();
+  List<String> _buildPassengerDisplayList() {
+    final responsible = _safe(
+      reservation.clientNom,
+      fallback: 'Responsable',
+    );
 
-    final passengerBlock = passengers.isEmpty
-        ? reservation.clientNom
-        : passengers.join(', ');
+    final rawPassengers = _extractRawPassengerNames();
+
+    if (rawPassengers.isEmpty) {
+      return List.generate(
+        reservation.nombrePlace,
+        (index) => index == 0
+            ? responsible
+            : 'Invité N$index de $responsible',
+      );
+    }
+
+    final List<String> result = [];
+    int inviteIndex = 1;
+
+    for (int i = 0; i < rawPassengers.length; i++) {
+      final current = rawPassengers[i];
+
+      if (i == 0) {
+        result.add(current.isEmpty ? responsible : current);
+        continue;
+      }
+
+      final isUnnamed = current.isEmpty;
+      final looksLikeDefaultDuplicate =
+          current.toLowerCase() == responsible.toLowerCase();
+
+      if (isUnnamed || looksLikeDefaultDuplicate) {
+        result.add('Invité N$inviteIndex de $responsible');
+        inviteIndex++;
+      } else {
+        result.add(current);
+      }
+    }
+
+    while (result.length < reservation.nombrePlace) {
+      result.add('Invité N$inviteIndex de $responsible');
+      inviteIndex++;
+    }
+
+    return result;
+  }
+
+  String _buildQrData() {
+    final passengers = _buildPassengerDisplayList().join(', ');
 
     return [
       'RESERVATION_ID:${reservation.id}',
-      'TRAJET:${reservation.villeDepart}-${reservation.villeArrivee}',
+      'TRAJET:${reservation.trajetLabel}',
       'DATE:${reservation.dateDepart}',
       'HEURE:${reservation.heureFormatee}',
-      'RESPONSABLE:${reservation.clientNom}',
-      'PASSAGERS:$passengerBlock',
+      'RESPONSABLE:${_safe(reservation.clientNom)}',
+      'PASSAGERS:$passengers',
       'NB_PLACES:${reservation.nombrePlace}',
       'STATUT:${reservation.statut}',
     ].join('|');
@@ -45,8 +112,8 @@ class TicketDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final passengers = _extractPassengerNames();
-    final qrData = _buildReservationQrData();
+    final qrData = _buildQrData();
+    final passengers = _buildPassengerDisplayList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FF),
@@ -54,6 +121,7 @@ class TicketDetailsScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        centerTitle: true,
         iconTheme: const IconThemeData(color: Color(0xFF374151)),
         title: const Text(
           'Mon billet',
@@ -65,43 +133,35 @@ class TicketDetailsScreen extends StatelessWidget {
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
         children: [
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(22),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
             ),
             child: Column(
               children: [
-                const Text(
-                  'Billet de réservation',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151),
-                  ),
-                ),
-                const SizedBox(height: 18),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: const Color(0xFFF6F7FB),
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: QrImageView(
                     data: qrData,
                     version: QrVersions.auto,
-                    size: 220,
+                    size: 180,
+                    backgroundColor: Colors.white,
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 16),
                 const Text(
                   'Scanner ce QR pour voir toute la réservation',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 14,
                     color: Color(0xFF6B7280),
                   ),
                 ),
@@ -110,7 +170,7 @@ class TicketDetailsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
@@ -121,58 +181,52 @@ class TicketDetailsScreen extends StatelessWidget {
                 const Text(
                   'Détails du trajet',
                   style: TextStyle(
-                    fontSize: 17,
+                    fontSize: 18,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF374151),
                   ),
                 ),
-                const SizedBox(height: 16),
-                _TicketRow(
+                const SizedBox(height: 18),
+                _DetailRow(
                   label: 'Trajet',
-                  value: reservation.trajetLabel,
+                  value: _safe(reservation.trajetLabel),
                 ),
-                _TicketRow(
+                _DetailRow(
                   label: 'Date',
-                  value: reservation.dateDepart.isEmpty
-                      ? '-'
-                      : reservation.dateDepart,
+                  value: _safe(reservation.dateDepart),
                 ),
-                _TicketRow(
+                _DetailRow(
                   label: 'Heure',
-                  value: reservation.heureFormatee.isEmpty
-                      ? '-'
-                      : reservation.heureFormatee,
+                  value: _safe(reservation.heureFormatee),
                 ),
-                _TicketRow(
+                _DetailRow(
                   label: 'Véhicule',
-                  value: reservation.vehiculeImmatriculation.isEmpty
-                      ? '-'
-                      : reservation.vehiculeImmatriculation,
+                  value: _safe(reservation.vehiculeImmatriculation),
                 ),
-                _TicketRow(
+                _DetailRow(
                   label: 'Responsable',
-                  value: reservation.clientNom,
+                  value: _safe(reservation.clientNom),
                 ),
-                _TicketRow(
+                _DetailRow(
                   label: 'Nombre de places',
                   value: '${reservation.nombrePlace}',
                 ),
-                _TicketRow(
+                _DetailRow(
                   label: 'Montant',
-                  value: reservation.prixFormate,
-                  highlighted: true,
+                  value: _safe(reservation.prixFormate),
+                  highlight: true,
                 ),
-                _TicketRow(
+                _DetailRow(
                   label: 'Statut',
-                  value: reservation.statut,
-                  highlighted: true,
+                  value: _safe(reservation.statut),
+                  highlight: true,
                 ),
               ],
             ),
           ),
           const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(24),
@@ -183,77 +237,52 @@ class TicketDetailsScreen extends StatelessWidget {
                 const Text(
                   'Liste des passagers',
                   style: TextStyle(
-                    fontSize: 17,
+                    fontSize: 18,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF374151),
                   ),
                 ),
-                const SizedBox(height: 14),
-                if (passengers.isEmpty)
-                  Text(
-                    reservation.clientNom,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      color: Color(0xFF374151),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  )
-                else
-                  ...List.generate(
-                    passengers.length,
-                    (index) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Row(
-                        children: [
-                          Container(
-                            height: 28,
-                            width: 28,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF3158F5),
-                              borderRadius: BorderRadius.circular(14),
-                            ),
+                const SizedBox(height: 16),
+                ...List.generate(
+                  passengers.length,
+                  (index) => Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: Row(
+                      children: [
+                        Container(
+                          height: 54,
+                          width: 54,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF3158F5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
                             child: Text(
                               '${index + 1}',
                               style: const TextStyle(
                                 color: Colors.white,
+                                fontSize: 17,
                                 fontWeight: FontWeight.w700,
-                                fontSize: 12,
                               ),
                             ),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              passengers[index],
-                              style: const TextStyle(
-                                fontSize: 15,
-                                color: Color(0xFF374151),
-                                fontWeight: FontWeight.w600,
-                              ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Text(
+                            passengers[index],
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF374151),
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
+                ),
               ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: SelectableText(
-              qrData,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF6B7280),
-                height: 1.5,
-              ),
             ),
           ),
         ],
@@ -262,28 +291,28 @@ class TicketDetailsScreen extends StatelessWidget {
   }
 }
 
-class _TicketRow extends StatelessWidget {
+class _DetailRow extends StatelessWidget {
   final String label;
   final String value;
-  final bool highlighted;
+  final bool highlight;
 
-  const _TicketRow({
+  const _DetailRow({
     required this.label,
     required this.value,
-    this.highlighted = false,
+    this.highlight = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Row(
         children: [
           Expanded(
             child: Text(
               label,
               style: const TextStyle(
-                fontSize: 14,
+                fontSize: 15,
                 color: Color(0xFF6B7280),
               ),
             ),
@@ -293,9 +322,9 @@ class _TicketRow extends StatelessWidget {
               value,
               textAlign: TextAlign.right,
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: highlighted ? FontWeight.w700 : FontWeight.w600,
-                color: highlighted
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: highlight
                     ? const Color(0xFF3158F5)
                     : const Color(0xFF374151),
               ),

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:transia_mobile/core/constants/api_constants.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
+import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/client/models/reservation_model.dart';
 import 'package:transia_mobile/features/client/models/reservation_request.dart';
 
@@ -11,22 +12,44 @@ class ReservationService {
 
   ReservationService({required this.apiClient});
 
-  static const String _localCreatedReservationIdsKey =
-      'local_created_reservation_ids';
+  final SecureStorageService _secureStorageService = SecureStorageService();
+
+  Future<String> _buildUserScopedKey(String baseKey) async {
+    final numericUserId = await _secureStorageService.getNumericUserId();
+    final username = await _secureStorageService.getUsername();
+
+    if (numericUserId != null && numericUserId.trim().isNotEmpty) {
+      return '${baseKey}_user_$numericUserId';
+    }
+
+    if (username != null && username.trim().isNotEmpty) {
+      return '${baseKey}_username_${username.trim()}';
+    }
+
+    return '${baseKey}_anonymous';
+  }
 
   Future<List<String>> getLocalCreatedReservationIds() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_localCreatedReservationIdsKey) ?? [];
+    final key = await _buildUserScopedKey('local_created_reservation_ids');
+    return prefs.getStringList(key) ?? [];
   }
 
   Future<void> saveLocalCreatedReservationId(String reservationId) async {
     final prefs = await SharedPreferences.getInstance();
-    final current = prefs.getStringList(_localCreatedReservationIdsKey) ?? [];
+    final key = await _buildUserScopedKey('local_created_reservation_ids');
+    final current = prefs.getStringList(key) ?? [];
 
     if (!current.contains(reservationId)) {
       current.add(reservationId);
-      await prefs.setStringList(_localCreatedReservationIdsKey, current);
+      await prefs.setStringList(key, current);
     }
+  }
+
+  Future<void> clearCurrentUserLocalCreatedReservationIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = await _buildUserScopedKey('local_created_reservation_ids');
+    await prefs.remove(key);
   }
 
   Future<Map<String, dynamic>> createReservation(
@@ -148,6 +171,15 @@ class ReservationService {
     }
   }
 
+  String _normalize(String value) {
+    return value.trim().toLowerCase();
+  }
+
+  bool _containsNormalized(String base, String query) {
+    if (query.isEmpty) return false;
+    return _normalize(base).contains(_normalize(query));
+  }
+
   Future<List<ReservationModel>> getMyReservations({
     required int userId,
     required String fullName,
@@ -156,23 +188,36 @@ class ReservationService {
     final reservations = await getReservations();
     final localCreatedIds = await getLocalCreatedReservationIds();
 
-    final normalizedFullName = fullName.trim().toLowerCase();
-    final normalizedUsername = username.trim().toLowerCase();
+    final normalizedFullName = _normalize(fullName);
+    final normalizedUsername = _normalize(username);
 
     final filtered = reservations.where((item) {
       final sameUserId = item.userId == userId;
 
-      final sameName =
+      final sameNameExact =
           normalizedFullName.isNotEmpty &&
-          item.clientNom.trim().toLowerCase() == normalizedFullName;
+          _normalize(item.clientNom) == normalizedFullName;
 
-      final sameUsername =
+      final sameNameContains =
+          normalizedFullName.isNotEmpty &&
+          _containsNormalized(item.clientNom, normalizedFullName);
+
+      final sameUsernameExact =
           normalizedUsername.isNotEmpty &&
-          item.clientNom.trim().toLowerCase() == normalizedUsername;
+          _normalize(item.clientNom) == normalizedUsername;
+
+      final sameUsernameContains =
+          normalizedUsername.isNotEmpty &&
+          _containsNormalized(item.clientNom, normalizedUsername);
 
       final locallyCreated = localCreatedIds.contains(item.id);
 
-      return sameUserId || sameName || sameUsername || locallyCreated;
+      return sameUserId ||
+          sameNameExact ||
+          sameNameContains ||
+          sameUsernameExact ||
+          sameUsernameContains ||
+          locallyCreated;
     }).toList();
 
     debugPrint(

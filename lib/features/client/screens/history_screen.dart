@@ -22,10 +22,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   bool isLoading = true;
   List<ReservationModel> historyReservations = [];
-  List<String> locallyPaidIds = [];
-  int? numericUserId;
-  String fullName = '';
-  String username = '';
 
   @override
   void initState() {
@@ -33,6 +29,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     secureStorageService = SecureStorageService();
     apiClient = ApiClient(secureStorageService);
     reservationService = ReservationService(apiClient: apiClient);
+
     chargerHistorique();
   }
 
@@ -50,7 +47,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       final storedNumericUserId =
           int.tryParse(storedNumericUserIdString ?? '');
 
-      final allReservations = await reservationService.getMyReservations(
+      final result = await reservationService.getMyReservations(
         userId: storedNumericUserId ?? -1,
         fullName: storedFullName ?? '',
         username: storedUsername ?? '',
@@ -58,14 +55,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
       final paidIds = await paymentStatusService.getPaidReservationIds();
 
-      final filteredHistory = allReservations.where((reservation) {
-        final paid = reservation.isPaidOrValidated ||
+      final history = result.where((reservation) {
+        final isPaid = reservation.isPaidOrValidated ||
             paidIds.contains(reservation.id);
-        final past = reservation.isPast;
-        return paid && past;
+
+        final dt = reservation.departureDateTime;
+        final isPast = dt == null ? false : !dt.isAfter(DateTime.now());
+
+        return isPaid && isPast;
       }).toList();
 
-      filteredHistory.sort((a, b) {
+      history.sort((a, b) {
         final da = a.departureDateTime ?? DateTime(1900);
         final db = b.departureDateTime ?? DateTime(1900);
         return db.compareTo(da);
@@ -74,11 +74,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       if (!mounted) return;
 
       setState(() {
-        numericUserId = storedNumericUserId;
-        fullName = storedFullName ?? '';
-        username = storedUsername ?? '';
-        locallyPaidIds = paidIds;
-        historyReservations = filteredHistory;
+        historyReservations = history;
         isLoading = false;
       });
     } catch (e) {
@@ -98,17 +94,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
-  bool _isPaid(ReservationModel reservation) {
-    return reservation.isPaidOrValidated ||
-        locallyPaidIds.contains(reservation.id);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FF),
       appBar: AppBar(
-        title: const Text('Historique'),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF374151)),
+        title: const Text(
+          'Historique',
+          style: TextStyle(
+            color: Color(0xFF374151),
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         actions: [
           IconButton(
             onPressed: chargerHistorique,
@@ -125,15 +127,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
             : historyReservations.isEmpty
                 ? ListView(
                     padding: const EdgeInsets.all(24),
-                    children: [
-                      const SizedBox(height: 80),
-                      const Icon(
+                    children: const [
+                      SizedBox(height: 80),
+                      Icon(
                         Icons.history_rounded,
                         size: 54,
                         color: Color(0xFF9CA3AF),
                       ),
-                      const SizedBox(height: 14),
-                      const Text(
+                      SizedBox(height: 14),
+                      Text(
                         'Aucun historique',
                         textAlign: TextAlign.center,
                         style: TextStyle(
@@ -142,12 +144,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           color: Color(0xFF374151),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       Text(
-                        'Client: $fullName | $username | id=${numericUserId ?? "-"}',
+                        'Seules les réservations payées et déjà passées apparaissent ici.',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 12,
+                        style: TextStyle(
+                          fontSize: 14,
                           color: Color(0xFF6B7280),
                         ),
                       ),
@@ -180,11 +182,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             const SizedBox(height: 10),
                             _HistoryRow(
                               label: 'Date',
-                              value: reservation.dateDepart,
+                              value: reservation.dateDepart.isEmpty
+                                  ? '-'
+                                  : reservation.dateDepart,
                             ),
                             _HistoryRow(
                               label: 'Heure',
-                              value: reservation.heureFormatee,
+                              value: reservation.heureFormatee.isEmpty
+                                  ? '-'
+                                  : reservation.heureFormatee,
                             ),
                             _HistoryRow(
                               label: 'Responsable',
@@ -194,23 +200,28 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               label: 'Montant',
                               value: reservation.prixFormate,
                             ),
-                            _HistoryRow(
-                              label: 'Statut',
-                              value: _isPaid(reservation)
-                                  ? 'PAYÉE'
-                                  : reservation.statut,
-                            ),
                             const SizedBox(height: 12),
                             Align(
                               alignment: Alignment.centerRight,
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  context.push(
-                                    AppRoutes.ticketDetails,
-                                    extra: reservation,
-                                  );
-                                },
-                                child: const Text('Voir le billet'),
+                              child: SizedBox(
+                                height: 38,
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    context.push(
+                                      AppRoutes.ticketDetails,
+                                      extra: reservation,
+                                    );
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF3158F5),
+                                    foregroundColor: Colors.white,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: const Text('Voir le billet'),
+                                ),
                               ),
                             ),
                           ],

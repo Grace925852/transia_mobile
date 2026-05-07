@@ -31,9 +31,7 @@ class AppRoutes {
   static const String chauffeurPassengers = '/chauffeur/passagers';
 }
 
-/// true = on lance le client
-/// false = on lance le chauffeur
-const bool launchClientOnly = false;
+const bool launchClientOnly = true;
 
 final GoRouter appRouter = GoRouter(
   initialLocation:
@@ -64,7 +62,7 @@ final GoRouter appRouter = GoRouter(
           villeDepart: data['villeDepart'],
           villeArrivee: data['villeArrivee'],
           dateDepart: data['dateDepart'],
-          nombreSieges: data['nombreSieges'],
+          nombreSieges: data['nombreSieges'] ?? 1,
         );
       },
     ),
@@ -81,6 +79,7 @@ final GoRouter appRouter = GoRouter(
         return BookingSummaryScreen(
           trajet: data['trajet'] as TrajetModel,
           nombreSieges: data['nombreSieges'] as int,
+          selectedSeats: (data['selectedSeats'] as List?)?.cast<int>(),
         );
       },
     ),

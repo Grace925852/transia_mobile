@@ -27,8 +27,6 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
   String? villeDepart;
   String? villeArrivee;
-  int nombreSieges = 1;
-  bool siegesRapproches = false;
   DateTime? selectedDate;
 
   List<VilleModel> villes = [];
@@ -100,12 +98,14 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       final villesResult = await villeService.getVilles();
       final trajetsResult = await trajetService.getTrajets();
 
+      final futurs = trajetsResult.where(_isUpcomingTrajet).toList();
+
       if (!mounted) return;
 
       setState(() {
         villes = villesResult;
-        trajets = trajetsResult;
-        trajetsAffiches = trajetsResult;
+        trajets = futurs;
+        trajetsAffiches = futurs;
         isLoadingData = false;
       });
     } catch (e) {
@@ -119,36 +119,90 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     }
   }
 
-  Future<void> choisirDate() async {
+  DateTime _todayOnly() {
     final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  Future<void> choisirDate() async {
+    final today = _todayOnly();
 
     final result = await showDatePicker(
       context: context,
-      initialDate: selectedDate ?? now,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 2),
+      initialDate: selectedDate != null && !selectedDate!.isBefore(today)
+          ? selectedDate!
+          : today,
+      firstDate: today,
+      lastDate: DateTime(today.year + 2),
     );
 
     if (result != null) {
       setState(() {
         selectedDate = result;
       });
+      await appliquerFiltres();
     }
   }
 
-  Future<void> rechercherTrajet() async {
-    if (villeDepart == null || villeDepart!.trim().isEmpty) {
-      afficherMessage('Veuillez choisir ou saisir la ville de départ.');
+  DateTime? _parseTrajetDateTime(TrajetModel trajet) {
+    try {
+      final rawDate = trajet.dateDepart.trim();
+      final rawTime = trajet.heureFormatee.trim().isEmpty
+          ? '00:00'
+          : trajet.heureFormatee.trim();
+
+      int year;
+      int month;
+      int day;
+
+      if (rawDate.contains('-')) {
+        final parts = rawDate.split('-');
+        if (parts.length != 3) return null;
+        year = int.parse(parts[0]);
+        month = int.parse(parts[1]);
+        day = int.parse(parts[2]);
+      } else if (rawDate.contains('/')) {
+        final parts = rawDate.split('/');
+        if (parts.length != 3) return null;
+        day = int.parse(parts[0]);
+        month = int.parse(parts[1]);
+        year = int.parse(parts[2]);
+      } else {
+        return null;
+      }
+
+      final timeParts = rawTime.split(':');
+      final hour = int.tryParse(timeParts[0]) ?? 0;
+      final minute =
+          timeParts.length > 1 ? int.tryParse(timeParts[1]) ?? 0 : 0;
+
+      return DateTime(year, month, day, hour, minute);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _isUpcomingTrajet(TrajetModel trajet) {
+    final dt = _parseTrajetDateTime(trajet);
+    if (dt == null) return true;
+    return dt.isAfter(DateTime.now());
+  }
+
+  Future<void> appliquerFiltres() async {
+    final depart = villeDepart?.trim().toLowerCase() ?? '';
+    final arrivee = villeArrivee?.trim().toLowerCase() ?? '';
+
+    if (depart.isEmpty && arrivee.isEmpty && selectedDate == null) {
+      setState(() {
+        trajetsAffiches = trajets.where(_isUpcomingTrajet).toList();
+      });
       return;
     }
 
-    if (villeArrivee == null || villeArrivee!.trim().isEmpty) {
-      afficherMessage("Veuillez choisir ou saisir la ville d'arrivée.");
-      return;
-    }
-
-    if (selectedDate == null) {
-      afficherMessage('Veuillez choisir la date de départ.');
+    if (depart.isNotEmpty && arrivee.isNotEmpty && depart == arrivee) {
+      setState(() {
+        trajetsAffiches = [];
+      });
       return;
     }
 
@@ -157,33 +211,38 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     });
 
     try {
-      final result = await trajetService.rechercherTrajets(
-        villeDepart: villeDepart!,
-        villeArrivee: villeArrivee!,
-        dateDepart: selectedDate!,
-      );
+      final filtered = trajets.where((trajet) {
+        final matchDepart = depart.isEmpty
+            ? true
+            : trajet.villeDepart.trim().toLowerCase().contains(depart);
+
+        final matchArrivee = arrivee.isEmpty
+            ? true
+            : trajet.villeArrivee.trim().toLowerCase().contains(arrivee);
+
+        final matchDate = selectedDate == null
+            ? true
+            : _sameDate(trajet.dateDepart, selectedDate!);
+
+        final differentCities = trajet.villeDepart.trim().toLowerCase() !=
+            trajet.villeArrivee.trim().toLowerCase();
+
+        final upcoming = _isUpcomingTrajet(trajet);
+
+        return matchDepart &&
+            matchArrivee &&
+            matchDate &&
+            differentCities &&
+            upcoming;
+      }).toList();
 
       if (!mounted) return;
 
       setState(() {
-        trajetsAffiches = result;
+        trajetsAffiches = filtered;
       });
-
-      if (result.isEmpty) {
-        afficherMessage('Aucun trajet disponible pour cette recherche.');
-      } else {
-        context.push(
-          AppRoutes.tripList,
-          extra: {
-            'trajets': result,
-            'villeDepart': villeDepart!,
-            'villeArrivee': villeArrivee!,
-            'dateDepart': dateText,
-            'nombreSieges': nombreSieges,
-          },
-        );
-      }
     } catch (e) {
+      if (!mounted) return;
       afficherMessage(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) {
@@ -194,17 +253,80 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     }
   }
 
+  bool _sameDate(String rawDate, DateTime selected) {
+    final day = selected.day.toString().padLeft(2, '0');
+    final month = selected.month.toString().padLeft(2, '0');
+    final year = selected.year.toString();
+
+    final formats = [
+      '$day/$month/$year',
+      '$year-$month-$day',
+    ];
+
+    return formats.contains(rawDate.trim());
+  }
+
   void reinitialiserRecherche() {
     setState(() {
       villeDepart = null;
       villeArrivee = null;
       selectedDate = null;
-      nombreSieges = 1;
-      siegesRapproches = false;
-      trajetsAffiches = trajets;
+      trajetsAffiches = trajets.where(_isUpcomingTrajet).toList();
     });
 
-    afficherMessage('Recherche réinitialisée.');
+    afficherMessage('Filtres réinitialisés.');
+  }
+
+  Future<void> _setVilleDepart(String value) async {
+    final cleaned = value.trim();
+
+    if (cleaned.isEmpty) {
+      setState(() {
+        villeDepart = null;
+      });
+      await appliquerFiltres();
+      return;
+    }
+
+    if (villeArrivee != null &&
+        villeArrivee!.trim().toLowerCase() == cleaned.toLowerCase()) {
+      afficherMessage(
+        "La ville de départ doit être différente de la ville d'arrivée.",
+      );
+      return;
+    }
+
+    setState(() {
+      villeDepart = cleaned;
+    });
+
+    await appliquerFiltres();
+  }
+
+  Future<void> _setVilleArrivee(String value) async {
+    final cleaned = value.trim();
+
+    if (cleaned.isEmpty) {
+      setState(() {
+        villeArrivee = null;
+      });
+      await appliquerFiltres();
+      return;
+    }
+
+    if (villeDepart != null &&
+        villeDepart!.trim().toLowerCase() == cleaned.toLowerCase()) {
+      afficherMessage(
+        "La ville d'arrivée doit être différente de la ville de départ.",
+      );
+      return;
+    }
+
+    setState(() {
+      villeArrivee = cleaned;
+    });
+
+    await appliquerFiltres();
   }
 
   void afficherMessage(String message) {
@@ -340,9 +462,10 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             icon: Icons.location_on_outlined,
             hintText: 'Sélectionnez une ville',
             initialValue: villeDepart,
+            excludedValue: villeArrivee,
             cities: nomsVilles,
-            onChanged: (value) {
-              villeDepart = value;
+            onChanged: (value) async {
+              await _setVilleDepart(value);
             },
           ),
           const SizedBox(height: 14),
@@ -352,9 +475,10 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             icon: Icons.near_me_outlined,
             hintText: 'Sélectionnez une ville',
             initialValue: villeArrivee,
+            excludedValue: villeDepart,
             cities: nomsVilles,
-            onChanged: (value) {
-              villeArrivee = value;
+            onChanged: (value) async {
+              await _setVilleArrivee(value);
             },
           ),
           const SizedBox(height: 14),
@@ -367,109 +491,6 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               text: dateText,
               trailingIcon: Icons.calendar_month_outlined,
             ),
-          ),
-          const SizedBox(height: 14),
-          _label('Nombre de sièges'),
-          const SizedBox(height: 6),
-          _SeatSelector(
-            value: nombreSieges,
-            onChanged: (value) {
-              setState(() {
-                nombreSieges = value;
-              });
-            },
-          ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              SizedBox(
-                height: 24,
-                width: 24,
-                child: Checkbox(
-                  value: siegesRapproches,
-                  activeColor: textColor,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  onChanged: (value) {
-                    setState(() {
-                      siegesRapproches = value ?? false;
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Sièges rapprochés (pour groupes)',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: textColor.withOpacity(0.78),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: isSearching ? null : rechercherTrajet,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryBlue,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: isSearching
-                        ? const SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2.4,
-                            ),
-                          )
-                        : const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.search, size: 20),
-                              SizedBox(width: 8),
-                              Text(
-                                'Rechercher',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              SizedBox(
-                height: 52,
-                width: 52,
-                child: OutlinedButton(
-                  onPressed: reinitialiserRecherche,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: primaryBlue,
-                    side: BorderSide(color: primaryBlue.withOpacity(0.4)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  child: const Icon(Icons.refresh_rounded, size: 21),
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -501,16 +522,6 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          const _SuggestionCard(
-            icon: Icons.trending_up_rounded,
-            title: 'Itinéraire rapide disponible',
-            subtitle: 'Les trajets programmés sont chargés depuis le serveur',
-            backgroundColor: Color(0xFFF0FFF4),
-            iconColor: Color(0xFF4CAF50),
-            titleColor: Color(0xFF45B85A),
-            subtitleColor: Color(0xFF6ABD75),
-          ),
-          const SizedBox(height: 12),
           const _SuggestionCard(
             icon: Icons.access_time_rounded,
             title: 'Actualisation dynamique',
@@ -549,7 +560,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             )
           else if (trajetsAffiches.isEmpty)
             _EmptyTrajetCard(
-              onRefresh: chargerDonnees,
+              onReset: reinitialiserRecherche,
             )
           else
             GridView.builder(
@@ -622,6 +633,7 @@ class _SearchableCityField extends StatefulWidget {
   final IconData icon;
   final String hintText;
   final String? initialValue;
+  final String? excludedValue;
   final List<String> cities;
   final ValueChanged<String> onChanged;
 
@@ -629,6 +641,7 @@ class _SearchableCityField extends StatefulWidget {
     required this.icon,
     required this.hintText,
     required this.initialValue,
+    required this.excludedValue,
     required this.cities,
     required this.onChanged,
   });
@@ -650,8 +663,8 @@ class _SearchableCityFieldState extends State<_SearchableCityField> {
   void didUpdateWidget(covariant _SearchableCityField oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (widget.initialValue == null && controller.text.isNotEmpty) {
-      controller.clear();
+    if ((widget.initialValue ?? '') != controller.text) {
+      controller.text = widget.initialValue ?? '';
     }
   }
 
@@ -666,12 +679,17 @@ class _SearchableCityFieldState extends State<_SearchableCityField> {
     return Autocomplete<String>(
       optionsBuilder: (TextEditingValue textEditingValue) {
         final query = textEditingValue.text.trim().toLowerCase();
+        final excluded = widget.excludedValue?.trim().toLowerCase() ?? '';
+
+        final baseCities = widget.cities.where((city) {
+          return excluded.isEmpty || city.toLowerCase() != excluded;
+        });
 
         if (query.isEmpty) {
-          return widget.cities;
+          return baseCities;
         }
 
-        return widget.cities.where(
+        return baseCities.where(
           (city) => city.toLowerCase().contains(query),
         );
       },
@@ -685,15 +703,12 @@ class _SearchableCityFieldState extends State<_SearchableCityField> {
         focusNode,
         onFieldSubmitted,
       ) {
-        textController.text = controller.text;
-        textController.selection = TextSelection.fromPosition(
-          TextPosition(offset: textController.text.length),
-        );
-
-        textController.addListener(() {
-          controller.text = textController.text;
-          widget.onChanged(textController.text);
-        });
+        if (textController.text != controller.text) {
+          textController.text = controller.text;
+          textController.selection = TextSelection.fromPosition(
+            TextPosition(offset: textController.text.length),
+          );
+        }
 
         return Container(
           height: 52,
@@ -708,6 +723,7 @@ class _SearchableCityFieldState extends State<_SearchableCityField> {
           child: TextField(
             controller: textController,
             focusNode: focusNode,
+            onChanged: widget.onChanged,
             style: const TextStyle(
               fontSize: 15,
               color: Color(0xFF111827),
@@ -823,74 +839,6 @@ class _InputDisplayBox extends StatelessWidget {
               color: const Color(0xFF9CA3AF),
               size: 21,
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SeatSelector extends StatelessWidget {
-  final int value;
-  final ValueChanged<int> onChanged;
-
-  const _SeatSelector({
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF6F7FB),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: const Color(0xFFE5E7EB),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.groups_2_outlined,
-            color: Color(0xFF9CA3AF),
-            size: 22,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<int>(
-                value: value,
-                isExpanded: true,
-                borderRadius: BorderRadius.circular(14),
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: Color(0xFF9CA3AF),
-                  size: 25,
-                ),
-                style: const TextStyle(
-                  fontSize: 15,
-                  color: Color(0xFF111827),
-                ),
-                items: List.generate(10, (index) {
-                  final seat = index + 1;
-                  return DropdownMenuItem<int>(
-                    value: seat,
-                    child: Text(
-                      seat == 1 ? '1 siège' : '$seat sièges',
-                    ),
-                  );
-                }),
-                onChanged: (value) {
-                  if (value != null) {
-                    onChanged(value);
-                  }
-                },
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -1146,10 +1094,10 @@ class _InfoLine extends StatelessWidget {
 }
 
 class _EmptyTrajetCard extends StatelessWidget {
-  final Future<void> Function() onRefresh;
+  final VoidCallback onReset;
 
   const _EmptyTrajetCard({
-    required this.onRefresh,
+    required this.onReset,
   });
 
   @override
@@ -1182,7 +1130,7 @@ class _EmptyTrajetCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Ajoutez des trajets depuis Postman puis actualisez la page.',
+            'Ajustez les filtres ou réinitialisez la page.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
@@ -1191,9 +1139,9 @@ class _EmptyTrajetCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           OutlinedButton.icon(
-            onPressed: onRefresh,
+            onPressed: onReset,
             icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Actualiser'),
+            label: const Text('Réinitialiser'),
           ),
         ],
       ),

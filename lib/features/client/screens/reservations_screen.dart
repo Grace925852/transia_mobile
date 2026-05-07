@@ -21,13 +21,12 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
   final PaymentStatusService paymentStatusService = PaymentStatusService();
 
   bool isLoading = true;
+  String errorMessage = '';
+
   List<ReservationModel> reservations = [];
   List<String> locallyPaidIds = [];
 
-  int? numericUserId;
-  String fullName = '';
-  String username = '';
-  String errorMessage = '';
+  int selectedTab = 0; // 0 = non payées à venir, 1 = payées à venir
 
   @override
   void initState() {
@@ -53,7 +52,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       final storedNumericUserId =
           int.tryParse(storedNumericUserIdString ?? '');
 
-      final result = await reservationService.getMyActiveReservations(
+      final result = await reservationService.getMyReservations(
         userId: storedNumericUserId ?? -1,
         fullName: storedFullName ?? '',
         username: storedUsername ?? '',
@@ -61,12 +60,15 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
 
       final paidIds = await paymentStatusService.getPaidReservationIds();
 
+      result.sort((a, b) {
+        final da = a.departureDateTime ?? DateTime(2100);
+        final db = b.departureDateTime ?? DateTime(2100);
+        return da.compareTo(db);
+      });
+
       if (!mounted) return;
 
       setState(() {
-        numericUserId = storedNumericUserId;
-        fullName = storedFullName ?? '';
-        username = storedUsername ?? '';
         reservations = result;
         locallyPaidIds = paidIds;
         isLoading = false;
@@ -86,9 +88,22 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
         locallyPaidIds.contains(reservation.id);
   }
 
-  int get confirmedCount => reservations.where(_isPaid).length;
+  bool _isUpcomingReservation(ReservationModel reservation) {
+    final dt = reservation.departureDateTime;
+    if (dt == null) return true;
+    return dt.isAfter(DateTime.now());
+  }
 
-  int get pendingCount => reservations.where((r) => !_isPaid(r)).length;
+  List<ReservationModel> get unpaidReservations => reservations
+      .where((r) => !_isPaid(r) && _isUpcomingReservation(r))
+      .toList();
+
+  List<ReservationModel> get paidReservations => reservations
+      .where((r) => _isPaid(r) && _isUpcomingReservation(r))
+      .toList();
+
+  List<ReservationModel> get displayedReservations =>
+      selectedTab == 0 ? unpaidReservations : paidReservations;
 
   @override
   Widget build(BuildContext context) {
@@ -109,25 +124,16 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                   color: Color(0xFF374151),
                 ),
               ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: _CounterCard(
-                      value: '$confirmedCount',
-                      label: 'Confirmées',
-                      color: const Color(0xFF16A34A),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _CounterCard(
-                      value: '$pendingCount',
-                      label: 'En attente',
-                      color: const Color(0xFFF59E0B),
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 16),
+              _ReservationTabs(
+                unpaidCount: unpaidReservations.length,
+                paidCount: paidReservations.length,
+                selectedTab: selectedTab,
+                onChanged: (index) {
+                  setState(() {
+                    selectedTab = index;
+                  });
+                },
               ),
               const SizedBox(height: 18),
               if (isLoading)
@@ -142,14 +148,12 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                   message: errorMessage,
                   onRetry: chargerReservations,
                 )
-              else if (reservations.isEmpty)
-                _EmptyCard(
-                  fullName: fullName,
-                  username: username,
-                  numericUserId: numericUserId,
+              else if (displayedReservations.isEmpty)
+                _EmptyReservationCard(
+                  isPaidTab: selectedTab == 1,
                 )
               else
-                ...reservations.map(
+                ...displayedReservations.map(
                   (reservation) => Padding(
                     padding: const EdgeInsets.only(bottom: 14),
                     child: _ReservationCard(
@@ -180,45 +184,110 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
   }
 }
 
-class _CounterCard extends StatelessWidget {
-  final String value;
-  final String label;
-  final Color color;
+class _ReservationTabs extends StatelessWidget {
+  final int unpaidCount;
+  final int paidCount;
+  final int selectedTab;
+  final ValueChanged<int> onChanged;
 
-  const _CounterCard({
-    required this.value,
-    required this.label,
-    required this.color,
+  const _ReservationTabs({
+    required this.unpaidCount,
+    required this.paidCount,
+    required this.selectedTab,
+    required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 122,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 34,
-              fontWeight: FontWeight.w800,
-              color: color,
+    return Row(
+      children: [
+        Expanded(
+          child: _SmallTab(
+            title: 'En attente',
+            count: unpaidCount,
+            selected: selectedTab == 0,
+            color: const Color(0xFFF59E0B),
+            onTap: () => onChanged(0),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _SmallTab(
+            title: 'Payées',
+            count: paidCount,
+            selected: selectedTab == 1,
+            color: const Color(0xFF16A34A),
+            onTap: () => onChanged(1),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SmallTab extends StatelessWidget {
+  final String title;
+  final int count;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _SmallTab({
+    required this.title,
+    required this.count,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? Colors.white : Colors.white.withOpacity(0.75),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected ? color.withOpacity(0.35) : Colors.transparent,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 15,
-              color: Color(0xFF6B7280),
-            ),
+          child: Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: const Color(0xFF374151),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -240,10 +309,11 @@ class _ReservationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -251,71 +321,63 @@ class _ReservationCard extends StatelessWidget {
           Text(
             reservation.trajetLabel,
             style: const TextStyle(
-              fontSize: 18,
+              fontSize: 17,
               fontWeight: FontWeight.w700,
               color: Color(0xFF374151),
             ),
           ),
           const SizedBox(height: 14),
-          _ReservationRow(
-            label: 'Date',
-            value: reservation.dateDepart,
-          ),
-          _ReservationRow(
-            label: 'Heure',
-            value: reservation.heureFormatee,
-          ),
-          _ReservationRow(
-            label: 'Véhicule',
-            value: reservation.vehiculeImmatriculation,
-          ),
-          _ReservationRow(
-            label: 'Responsable',
-            value: reservation.clientNom,
-          ),
+          _ReservationRow(label: 'Date', value: reservation.dateDepart),
+          _ReservationRow(label: 'Heure', value: reservation.heureFormatee),
+          _ReservationRow(label: 'Véhicule', value: reservation.vehiculeImmatriculation),
+          _ReservationRow(label: 'Responsable', value: reservation.clientNom),
           _ReservationRow(
             label: 'Passagers',
             value: '${reservation.nombrePlace}',
           ),
           _ReservationRow(
-            label: 'Type',
-            value: reservation.nombrePlace > 1
-                ? 'Réservation groupe'
-                : 'Réservation simple',
-          ),
-          _ReservationRow(
             label: 'Statut',
-            value: isPaid ? 'PAYÉE' : reservation.statut,
+            value: isPaid ? 'PAYÉE' : 'EN ATTENTE',
             valueColor:
-                isPaid ? const Color(0xFF16A34A) : const Color(0xFF3158F5),
+                isPaid ? const Color(0xFF16A34A) : const Color(0xFFF59E0B),
           ),
           const Divider(height: 28),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: Text(
                   reservation.prixFormate,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 17,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: Color(0xFF3158F5),
                   ),
                 ),
               ),
-              SizedBox(
-                height: 42,
-                child: ElevatedButton(
-                  onPressed: isPaid ? onViewTicket : onPay,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF3158F5),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+              const SizedBox(width: 12),
+              Flexible(
+                child: SizedBox(
+                  height: 42,
+                  child: ElevatedButton(
+                    onPressed: isPaid ? onViewTicket : onPay,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF3158F5),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      minimumSize: const Size(0, 42),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
-                  ),
-                  child: Text(
-                    isPaid ? 'Voir billet' : 'Payer maintenant',
+                    child: Text(
+                      isPaid ? 'Voir billet' : 'Payer',
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ),
@@ -340,6 +402,8 @@ class _ReservationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final safeValue = value.trim().isEmpty ? '-' : value;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
@@ -355,7 +419,7 @@ class _ReservationRow extends StatelessWidget {
           ),
           Expanded(
             child: Text(
-              value,
+              safeValue,
               textAlign: TextAlign.right,
               style: TextStyle(
                 fontSize: 15,
@@ -370,15 +434,11 @@ class _ReservationRow extends StatelessWidget {
   }
 }
 
-class _EmptyCard extends StatelessWidget {
-  final String fullName;
-  final String username;
-  final int? numericUserId;
+class _EmptyReservationCard extends StatelessWidget {
+  final bool isPaidTab;
 
-  const _EmptyCard({
-    required this.fullName,
-    required this.username,
-    required this.numericUserId,
+  const _EmptyReservationCard({
+    required this.isPaidTab,
   });
 
   @override
@@ -387,31 +447,26 @@ class _EmptyCard extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
         children: [
-          const Icon(
-            Icons.calendar_month_outlined,
+          Icon(
+            isPaidTab
+                ? Icons.check_circle_outline_rounded
+                : Icons.calendar_month_outlined,
             size: 52,
-            color: Color(0xFF9CA3AF),
+            color: const Color(0xFF9CA3AF),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Aucune réservation active',
-            style: TextStyle(
+          Text(
+            isPaidTab
+                ? 'Aucune réservation payée à venir'
+                : 'Aucune réservation en attente à venir',
+            style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
               color: Color(0xFF374151),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Client: $fullName | $username | id=${numericUserId ?? "-"}',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF6B7280),
             ),
           ),
         ],

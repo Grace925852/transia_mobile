@@ -1,32 +1,63 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 
 class PaymentStatusService {
-  static const String _paidReservationsKey = 'paid_reservations_ids';
+  final SecureStorageService _secureStorageService = SecureStorageService();
+
+  Future<String> _buildUserScopedKey(String baseKey) async {
+    final numericUserId = await _secureStorageService.getNumericUserId();
+    final username = await _secureStorageService.getUsername();
+
+    if (numericUserId != null && numericUserId.trim().isNotEmpty) {
+      return '${baseKey}_user_$numericUserId';
+    }
+
+    if (username != null && username.trim().isNotEmpty) {
+      return '${baseKey}_username_${username.trim()}';
+    }
+
+    return '${baseKey}_anonymous';
+  }
 
   Future<List<String>> getPaidReservationIds() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getStringList(_paidReservationsKey) ?? [];
+    final key = await _buildUserScopedKey('paid_reservation_ids');
+    return prefs.getStringList(key) ?? [];
   }
 
-  Future<bool> isReservationPaid(String reservationId) async {
-    final paidIds = await getPaidReservationIds();
-    return paidIds.contains(reservationId);
-  }
-
-  Future<void> markReservationAsPaid(String reservationId) async {
+  Future<void> savePaidReservationId(String reservationId) async {
     final prefs = await SharedPreferences.getInstance();
-    final current = prefs.getStringList(_paidReservationsKey) ?? [];
+    final key = await _buildUserScopedKey('paid_reservation_ids');
 
-    if (!current.contains(reservationId)) {
-      current.add(reservationId);
-      await prefs.setStringList(_paidReservationsKey, current);
+    final ids = prefs.getStringList(key) ?? [];
+
+    if (!ids.contains(reservationId)) {
+      ids.add(reservationId);
+      await prefs.setStringList(key, ids);
     }
   }
 
-  Future<void> unmarkReservationAsPaid(String reservationId) async {
+  Future<void> markReservationAsPaid(String reservationId) async {
+    await savePaidReservationId(reservationId);
+  }
+
+  Future<bool> isReservationPaid(String reservationId) async {
+    final ids = await getPaidReservationIds();
+    return ids.contains(reservationId);
+  }
+
+  Future<void> removePaidReservationId(String reservationId) async {
     final prefs = await SharedPreferences.getInstance();
-    final current = prefs.getStringList(_paidReservationsKey) ?? [];
-    current.remove(reservationId);
-    await prefs.setStringList(_paidReservationsKey, current);
+    final key = await _buildUserScopedKey('paid_reservation_ids');
+
+    final ids = prefs.getStringList(key) ?? [];
+    ids.remove(reservationId);
+    await prefs.setStringList(key, ids);
+  }
+
+  Future<void> clearCurrentUserPaidReservations() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = await _buildUserScopedKey('paid_reservation_ids');
+    await prefs.remove(key);
   }
 }
