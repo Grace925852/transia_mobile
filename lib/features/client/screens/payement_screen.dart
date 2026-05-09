@@ -18,11 +18,74 @@ class PaymentScreen extends StatefulWidget {
 
 class _PaymentScreenState extends State<PaymentScreen> {
   final Color primaryBlue = const Color(0xFF3158F5);
-
   final PaymentStatusService paymentStatusService = PaymentStatusService();
 
   String paymentMethod = 'Flooz';
   bool isProcessing = false;
+
+  String _safe(String? value, {String fallback = '-'}) {
+    final v = value?.trim() ?? '';
+    return v.isEmpty ? fallback : v;
+  }
+
+  List<Map<String, dynamic>> _extractBillets() {
+    final raw = widget.reservation.rawData;
+
+    final dynamic billetsData =
+        raw['billets'] ??
+        raw['tickets'] ??
+        raw['billetEntities'] ??
+        raw['reservationBillets'];
+
+    if (billetsData is List) {
+      return billetsData
+          .where((e) => e is Map)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+    }
+
+    return [];
+  }
+
+  List<int> _extractSeatNumbers() {
+    final raw = widget.reservation.rawData;
+    final billets = _extractBillets();
+    final Set<int> seats = {};
+
+    void addSeat(dynamic value) {
+      if (value is int) {
+        seats.add(value);
+      } else if (value is String) {
+        final parsed = int.tryParse(value.trim());
+        if (parsed != null) {
+          seats.add(parsed);
+        }
+      }
+    }
+
+    for (final billet in billets) {
+      addSeat(billet['numeroSiege']);
+      addSeat(billet['numero_siege']);
+      addSeat(billet['seatNumber']);
+      addSeat(billet['siege']);
+    }
+
+    final extraLists = [
+      raw['numerosSieges'],
+      raw['selectedSeats'],
+      raw['seatNumbers'],
+    ];
+
+    for (final data in extraLists) {
+      if (data is List) {
+        for (final item in data) {
+          addSeat(item);
+        }
+      }
+    }
+
+    return seats.toList()..sort();
+  }
 
   Future<void> effectuerPaiement() async {
     setState(() {
@@ -40,17 +103,101 @@ class _PaymentScreenState extends State<PaymentScreen> {
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Paiement total effectué avec succès.'),
+      SnackBar(
+        content: Text(
+          'Paiement effectué avec succès par $paymentMethod.',
+        ),
       ),
     );
 
     context.go(AppRoutes.reservations);
   }
 
+  Widget _buildInfoRow(String label, String value, {bool highlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 16,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: highlight
+                    ? const Color(0xFF3158F5)
+                    : const Color(0xFF374151),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentMethodTile(String method, IconData icon) {
+    final isSelected = paymentMethod == method;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          paymentMethod = method;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFEFF3FF) : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isSelected ? primaryBlue : const Color(0xFFE5E7EB),
+            width: 1.4,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? primaryBlue : const Color(0xFF6B7280),
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                method,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isSelected ? primaryBlue : const Color(0xFF374151),
+                ),
+              ),
+            ),
+            Icon(
+              isSelected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_off,
+              color: isSelected ? primaryBlue : const Color(0xFF9CA3AF),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final reservation = widget.reservation;
+    final montant = widget.reservation.prixFormate;
+    final seatNumbers = _extractSeatNumbers();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FF),
@@ -58,6 +205,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        centerTitle: true,
         iconTheme: const IconThemeData(color: Color(0xFF374151)),
         title: const Text(
           'Paiement',
@@ -69,13 +217,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
         children: [
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(24),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -83,39 +231,38 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 const Text(
                   'Résumé du paiement',
                   style: TextStyle(
-                    fontSize: 17,
+                    fontSize: 22,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF374151),
                   ),
                 ),
-                const SizedBox(height: 16),
-                _PaymentRow(label: 'Réservation', value: '#${reservation.id}'),
-                _PaymentRow(label: 'Trajet', value: reservation.trajetLabel),
-                _PaymentRow(label: 'Date', value: reservation.dateDepart),
-                _PaymentRow(label: 'Heure', value: reservation.heureFormatee),
-                _PaymentRow(label: 'Responsable', value: reservation.clientNom),
-                _PaymentRow(
-                  label: 'Passagers',
-                  value: '${reservation.nombrePlace}',
+                const SizedBox(height: 18),
+                _buildInfoRow('Trajet', widget.reservation.trajetLabel),
+                _buildInfoRow('Date', widget.reservation.dateDepart),
+                _buildInfoRow('Heure', widget.reservation.heureFormatee),
+                _buildInfoRow(
+                  'Responsable',
+                  _safe(widget.reservation.clientNom),
                 ),
-                _PaymentRow(
-                  label: 'Prix unitaire',
-                  value: reservation.prixUnitaireFormate,
+                _buildInfoRow(
+                  'Passagers',
+                  '${widget.reservation.nombrePlace}',
                 ),
-                _PaymentRow(
-                  label: 'Montant à payer',
-                  value: reservation.prixFormate,
-                  highlighted: true,
+                _buildInfoRow(
+                  'Sièges choisis',
+                  seatNumbers.isEmpty ? '-' : seatNumbers.join(', '),
                 ),
+                _buildInfoRow('Prix unitaire', montant),
+                _buildInfoRow('Montant à payer', montant, highlight: true),
               ],
             ),
           ),
           const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(24),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,39 +270,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 const Text(
                   'Mode de paiement',
                   style: TextStyle(
-                    fontSize: 17,
+                    fontSize: 22,
                     fontWeight: FontWeight.w700,
                     color: Color(0xFF374151),
                   ),
                 ),
-                const SizedBox(height: 14),
-                RadioListTile<String>(
-                  value: 'Flooz',
-                  groupValue: paymentMethod,
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        paymentMethod = value;
-                      });
-                    }
-                  },
-                  title: const Text('Flooz'),
-                  subtitle: const Text('Paiement mobile'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                RadioListTile<String>(
-                  value: 'TMoney',
-                  groupValue: paymentMethod,
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() {
-                        paymentMethod = value;
-                      });
-                    }
-                  },
-                  title: const Text('TMoney'),
-                  subtitle: const Text('Paiement mobile'),
-                  contentPadding: EdgeInsets.zero,
+                const SizedBox(height: 18),
+                _buildPaymentMethodTile('Flooz', Icons.phone_android_rounded),
+                const SizedBox(height: 12),
+                _buildPaymentMethodTile(
+                  'TMoney',
+                  Icons.account_balance_wallet_rounded,
                 ),
               ],
             ),
@@ -165,20 +290,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(20),
             ),
             child: const Text(
               'Le paiement se fait en totalité. Aucun paiement par tranche n’est autorisé.',
               style: TextStyle(
                 fontSize: 14,
                 color: Color(0xFF6B7280),
-                height: 1.4,
+                height: 1.5,
               ),
             ),
           ),
           const SizedBox(height: 24),
           SizedBox(
-            height: 54,
+            height: 56,
             child: ElevatedButton(
               onPressed: isProcessing ? null : effectuerPaiement,
               style: ElevatedButton.styleFrom(
@@ -186,70 +311,25 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(18),
                 ),
               ),
               child: isProcessing
                   ? const SizedBox(
-                      height: 22,
                       width: 22,
+                      height: 22,
                       child: CircularProgressIndicator(
                         color: Colors.white,
                         strokeWidth: 2.4,
                       ),
                     )
-                  : Text(
-                      'Payer ${reservation.prixFormate}',
-                      style: const TextStyle(
-                        fontSize: 16,
+                  : const Text(
+                      'Confirmer le paiement',
+                      style: TextStyle(
+                        fontSize: 17,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaymentRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool highlighted;
-
-  const _PaymentRow({
-    required this.label,
-    required this.value,
-    this.highlighted = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF6B7280),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: highlighted ? FontWeight.w700 : FontWeight.w600,
-                color: highlighted
-                    ? const Color(0xFF3158F5)
-                    : const Color(0xFF374151),
-              ),
             ),
           ),
         ],

@@ -40,43 +40,52 @@ class ReservationModel {
     final dynamic userData =
         json['user'] ?? json['users'] ?? json['client'] ?? json['utilisateur'];
 
-    final dynamic billetsData = json['billets'] ?? json['tickets'];
+    final dynamic billetsData =
+        json['billets'] ??
+        json['tickets'] ??
+        json['billetEntities'] ??
+        json['reservationBillets'];
 
     final int parsedNombrePlace =
-        int.tryParse((json['nombrePlace'] ?? json['nombrePlaces'] ?? 0).toString()) ??
-            0;
+        int.tryParse(
+          (json['nombrePlace'] ?? json['nombrePlaces'] ?? 0).toString(),
+        ) ??
+        0;
 
     final int safeNombrePlace = parsedNombrePlace > 0 ? parsedNombrePlace : 1;
 
-    final int parsedUserId = int.tryParse(
-          (
-                    userData is Map
-                        ? (userData['id'] ??
-                            userData['userId'] ??
-                            userData['numericId'])
-                        : (json['userId'] ??
-                            json['clientId'] ??
-                            json['utilisateurId']))
-                ?.toString() ??
+    final int parsedUserId =
+        int.tryParse(
+          (userData is Map
+                      ? (userData['id'] ??
+                          userData['userId'] ??
+                          userData['numericId'])
+                      : (json['userId'] ??
+                          json['clientId'] ??
+                          json['utilisateurId']))
+                  ?.toString() ??
               '0',
         ) ??
         0;
 
     final String parsedClientNom =
-        (
-                  userData is Map
-                      ? (userData['fullName'] ??
-                          userData['nom'] ??
-                          userData['clientNom'] ??
-                          userData['username'])
-                      : (json['nomResponsable'] ??
-                          json['clientNom'] ??
-                          json['fullName']))
-                ?.toString() ??
-            '';
+        (json['nomResponsable'] ??
+                json['clientNom'] ??
+                (userData is Map
+                    ? (userData['fullName'] ??
+                        userData['nom'] ??
+                        userData['clientNom'] ??
+                        userData['username'])
+                    : json['fullName']))
+            ?.toString() ??
+        '';
 
     final String parsedTrajetId =
-        (json['trajetId'] ?? trajetData?['id'])?.toString() ?? '';
+        (json['trajetId'] ??
+                json['trajet_id'] ??
+                (trajetData != null ? trajetData['id'] : null))
+            ?.toString() ??
+        '';
 
     final dynamic villeDepartData =
         trajetData?['villeDepart'] ?? trajetData?['villeDepartDto'];
@@ -86,54 +95,65 @@ class ReservationModel {
         trajetData?['vehicule'] ?? trajetData?['vehiculeDto'];
 
     final String parsedVilleDepart =
-        (
-                  villeDepartData is Map
-                      ? (villeDepartData['nomVille'] ??
-                          villeDepartData['name'] ??
-                          villeDepartData['libelle'])
-                      : (trajetData?['villeDepartNom'] ??
-                          trajetData?['nomVilleDepart']))
+        (villeDepartData is Map
+                    ? (villeDepartData['nomVille'] ??
+                        villeDepartData['name'] ??
+                        villeDepartData['libelle'])
+                    : (trajetData?['villeDepartNom'] ??
+                        trajetData?['nomVilleDepart']))
                 ?.toString() ??
+            json['villeDepart']?.toString() ??
             '';
 
     final String parsedVilleArrivee =
-        (
-                  villeArriveeData is Map
-                      ? (villeArriveeData['nomVille'] ??
-                          villeArriveeData['name'] ??
-                          villeArriveeData['libelle'])
-                      : (trajetData?['villeArriveeNom'] ??
-                          trajetData?['nomVilleArrivee']))
+        (villeArriveeData is Map
+                    ? (villeArriveeData['nomVille'] ??
+                        villeArriveeData['name'] ??
+                        villeArriveeData['libelle'])
+                    : (trajetData?['villeArriveeNom'] ??
+                        trajetData?['nomVilleArrivee']))
                 ?.toString() ??
+            json['villeArrivee']?.toString() ??
             '';
 
     final String parsedDateDepart =
-        (trajetData?['dateDepart'] ?? trajetData?['date'])?.toString() ?? '';
+        (trajetData?['dateDepart'] ?? trajetData?['date'] ?? json['dateDepart'])
+            ?.toString() ??
+        '';
 
     final String parsedHeureDepart =
-        (trajetData?['heureDepart'] ?? trajetData?['heure'])?.toString() ?? '';
+        (trajetData?['heureDepart'] ??
+                trajetData?['heure'] ??
+                json['heureDepart'])
+            ?.toString() ??
+        '';
 
     final String parsedVehicule =
-        (
-                  vehiculeData is Map
-                      ? (vehiculeData['immatriculation'] ??
-                          vehiculeData['matricule'] ??
-                          vehiculeData['plaque'])
-                      : (trajetData?['vehiculeImmatriculation'] ??
-                          trajetData?['immatriculation']))
+        (vehiculeData is Map
+                    ? (vehiculeData['immatriculation'] ??
+                        vehiculeData['matricule'] ??
+                        vehiculeData['plaque'])
+                    : (trajetData?['vehiculeImmatriculation'] ??
+                        trajetData?['immatriculation']))
                 ?.toString() ??
+            json['vehiculeImmatriculation']?.toString() ??
             '';
 
     final String parsedStatut =
         (json['statut'] ?? json['status'] ?? 'EN_ATTENTE').toString();
 
     final double parsedPrixUnitaire =
-        double.tryParse((trajetData?['tarif'] ?? trajetData?['prix'] ?? 0).toString()) ??
-            0;
+        double.tryParse(
+          (trajetData?['tarif'] ?? trajetData?['prix'] ?? json['tarif'] ?? 0)
+              .toString(),
+        ) ??
+        0;
 
     double parsedMontant =
-        double.tryParse((json['montantTotal'] ?? json['totalAmount'] ?? 0).toString()) ??
-            0;
+        double.tryParse(
+          (json['montantTotal'] ?? json['totalAmount'] ?? 0).toString(),
+        ) ??
+        0;
 
     if (parsedMontant <= 0 && parsedPrixUnitaire > 0) {
       parsedMontant = parsedPrixUnitaire * safeNombrePlace;

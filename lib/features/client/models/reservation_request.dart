@@ -4,6 +4,7 @@ class ReservationRequestModel {
   final int nombrePlace;
   final String nomResponsable;
   final List<String> nomsPassagers;
+  final List<int> numerosSieges;
 
   ReservationRequestModel({
     required this.userId,
@@ -11,6 +12,7 @@ class ReservationRequestModel {
     required this.nombrePlace,
     required this.nomResponsable,
     required this.nomsPassagers,
+    this.numerosSieges = const [],
   });
 
   Map<String, dynamic> toJson() {
@@ -20,6 +22,7 @@ class ReservationRequestModel {
       'nombrePlace': nombrePlace,
       'nomResponsable': nomResponsable,
       'nomsPassagers': nomsPassagers,
+      'numerosSieges': numerosSieges,
     };
   }
 }

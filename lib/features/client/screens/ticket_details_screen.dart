@@ -15,36 +15,79 @@ class TicketDetailsScreen extends StatelessWidget {
     return v.isEmpty ? fallback : v;
   }
 
-  List<String> _extractRawPassengerNames() {
+  List<Map<String, dynamic>> _extractBillets() {
+    final raw = reservation.rawData;
+
     final dynamic billetsData =
-        reservation.rawData['billets'] ?? reservation.rawData['tickets'];
+        raw['billets'] ??
+        raw['tickets'] ??
+        raw['billetEntities'] ??
+        raw['reservationBillets'];
 
     if (billetsData is List) {
-      return billetsData.map((item) {
-        if (item is Map<String, dynamic>) {
-          return (item['nomPassager'] ??
-                  item['passagerNom'] ??
-                  item['nom'] ??
-                  '')
-              .toString()
-              .trim();
-        }
-
-        if (item is Map) {
-          final map = Map<String, dynamic>.from(item);
-          return (map['nomPassager'] ??
-                  map['passagerNom'] ??
-                  map['nom'] ??
-                  '')
-              .toString()
-              .trim();
-        }
-
-        return '';
-      }).toList();
+      return billetsData
+          .where((e) => e is Map)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
     }
 
     return [];
+  }
+
+  List<int> _extractSeatNumbers() {
+    final raw = reservation.rawData;
+    final billets = _extractBillets();
+    final Set<int> seats = {};
+
+    void addSeat(dynamic value) {
+      if (value is int) {
+        seats.add(value);
+      } else if (value is String) {
+        final parsed = int.tryParse(value.trim());
+        if (parsed != null) {
+          seats.add(parsed);
+        }
+      }
+    }
+
+    for (final billet in billets) {
+      addSeat(billet['numeroSiege']);
+      addSeat(billet['numero_siege']);
+      addSeat(billet['seatNumber']);
+      addSeat(billet['siege']);
+    }
+
+    final extraLists = [
+      raw['numerosSieges'],
+      raw['selectedSeats'],
+      raw['seatNumbers'],
+    ];
+
+    for (final data in extraLists) {
+      if (data is List) {
+        for (final item in data) {
+          addSeat(item);
+        }
+      }
+    }
+
+    return seats.toList()..sort();
+  }
+
+  List<String> _extractPassengerNames() {
+    final billets = _extractBillets();
+
+    if (billets.isEmpty) return [];
+
+    return billets.map((billet) {
+      return (billet['nomPassager'] ??
+              billet['nom_passager'] ??
+              billet['passagerNom'] ??
+              billet['nom'] ??
+              '')
+          .toString()
+          .trim();
+    }).toList();
   }
 
   List<String> _buildPassengerDisplayList() {
@@ -53,43 +96,28 @@ class TicketDetailsScreen extends StatelessWidget {
       fallback: 'Responsable',
     );
 
-    final rawPassengers = _extractRawPassengerNames();
-
-    if (rawPassengers.isEmpty) {
-      return List.generate(
-        reservation.nombrePlace,
-        (index) => index == 0
-            ? responsible
-            : 'Invité N$index de $responsible',
-      );
+    if (reservation.nombrePlace <= 1) {
+      return [responsible];
     }
 
-    final List<String> result = [];
-    int inviteIndex = 1;
+    final rawPassengers = _extractPassengerNames();
+    final List<String> result = [responsible];
+    int inviteCounter = 1;
 
-    for (int i = 0; i < rawPassengers.length; i++) {
-      final current = rawPassengers[i];
+    for (int index = 1; index < reservation.nombrePlace; index++) {
+      final rawValue = index < rawPassengers.length
+          ? rawPassengers[index].trim()
+          : '';
 
-      if (i == 0) {
-        result.add(current.isEmpty ? responsible : current);
-        continue;
-      }
+      final normalizedResponsible = responsible.toLowerCase();
 
-      final isUnnamed = current.isEmpty;
-      final looksLikeDefaultDuplicate =
-          current.toLowerCase() == responsible.toLowerCase();
-
-      if (isUnnamed || looksLikeDefaultDuplicate) {
-        result.add('Invité N$inviteIndex de $responsible');
-        inviteIndex++;
+      if (rawValue.isEmpty || rawValue.toLowerCase() == normalizedResponsible) {
+        result.add('Invité N$inviteCounter de $responsible');
       } else {
-        result.add(current);
+        result.add(rawValue);
       }
-    }
 
-    while (result.length < reservation.nombrePlace) {
-      result.add('Invité N$inviteIndex de $responsible');
-      inviteIndex++;
+      inviteCounter++;
     }
 
     return result;
@@ -97,6 +125,7 @@ class TicketDetailsScreen extends StatelessWidget {
 
   String _buildQrData() {
     final passengers = _buildPassengerDisplayList().join(', ');
+    final seats = _extractSeatNumbers();
 
     return [
       'RESERVATION_ID:${reservation.id}',
@@ -106,6 +135,7 @@ class TicketDetailsScreen extends StatelessWidget {
       'RESPONSABLE:${_safe(reservation.clientNom)}',
       'PASSAGERS:$passengers',
       'NB_PLACES:${reservation.nombrePlace}',
+      'SIEGES:${seats.isEmpty ? "-" : seats.join(", ")}',
       'STATUT:${reservation.statut}',
     ].join('|');
   }
@@ -114,6 +144,7 @@ class TicketDetailsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final qrData = _buildQrData();
     final passengers = _buildPassengerDisplayList();
+    final seatNumbers = _extractSeatNumbers();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FF),
@@ -187,18 +218,9 @@ class TicketDetailsScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 18),
-                _DetailRow(
-                  label: 'Trajet',
-                  value: _safe(reservation.trajetLabel),
-                ),
-                _DetailRow(
-                  label: 'Date',
-                  value: _safe(reservation.dateDepart),
-                ),
-                _DetailRow(
-                  label: 'Heure',
-                  value: _safe(reservation.heureFormatee),
-                ),
+                _DetailRow(label: 'Trajet', value: _safe(reservation.trajetLabel)),
+                _DetailRow(label: 'Date', value: _safe(reservation.dateDepart)),
+                _DetailRow(label: 'Heure', value: _safe(reservation.heureFormatee)),
                 _DetailRow(
                   label: 'Véhicule',
                   value: _safe(reservation.vehiculeImmatriculation),
@@ -212,8 +234,12 @@ class TicketDetailsScreen extends StatelessWidget {
                   value: '${reservation.nombrePlace}',
                 ),
                 _DetailRow(
+                  label: 'Numéros des sièges',
+                  value: seatNumbers.isEmpty ? '-' : seatNumbers.join(', '),
+                ),
+                _DetailRow(
                   label: 'Montant',
-                  value: _safe(reservation.prixFormate),
+                  value: reservation.prixFormate,
                   highlight: true,
                 ),
                 _DetailRow(

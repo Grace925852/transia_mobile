@@ -14,6 +14,8 @@ import 'package:transia_mobile/features/client/screens/refund_request.dart';
 import 'package:transia_mobile/features/client/screens/ticket_details_screen.dart';
 import 'package:transia_mobile/features/client/screens/trip_detail_screen.dart';
 import 'package:transia_mobile/features/client/screens/trip_list_screen.dart';
+import 'package:transia_mobile/features/client/screens/tracking_detail_screen.dart';
+import 'package:transia_mobile/features/client/screens/rating_screen.dart';
 
 class AppRoutes {
   static const String login = '/login';
@@ -29,6 +31,8 @@ class AppRoutes {
   static const String refundRequest = '/refund-request';
   static const String history = '/history';
   static const String chauffeurPassengers = '/chauffeur/passagers';
+  static const String trackingDetail = '/tracking-detail';
+  static const String rating = '/rating';
 }
 
 const bool launchClientOnly = true;
@@ -76,10 +80,14 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.bookingSummary,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>;
+
         return BookingSummaryScreen(
           trajet: data['trajet'] as TrajetModel,
           nombreSieges: data['nombreSieges'] as int,
-          selectedSeats: (data['selectedSeats'] as List?)?.cast<int>(),
+          selectedSeats: (data['selectedSeats'] as List<dynamic>? ?? [])
+              .map((e) => int.tryParse(e.toString()) ?? 0)
+              .where((e) => e > 0)
+              .toList(),
         );
       },
     ),
@@ -102,6 +110,18 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.refundRequest,
       builder: (context, state) => RefundRequestScreen(
+        reservation: state.extra as ReservationModel,
+      ),
+    ),
+    GoRoute(
+      path: AppRoutes.trackingDetail,
+      builder: (context, state) => TrackingDetailScreen(
+        reservation: state.extra as ReservationModel,
+      ),
+    ),
+    GoRoute(
+      path: AppRoutes.rating,
+      builder: (context, state) => RatingScreen(
         reservation: state.extra as ReservationModel,
       ),
     ),

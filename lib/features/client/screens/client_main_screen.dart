@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:transia_mobile/features/client/screens/client_home_screen.dart';
 import 'package:transia_mobile/features/client/screens/profile_screen.dart';
 import 'package:transia_mobile/features/client/screens/reservations_screen.dart';
+import 'package:transia_mobile/features/client/screens/tracking_list_screen.dart';
 
 class ClientMainScreen extends StatefulWidget {
   final int initialIndex;
@@ -17,16 +18,17 @@ class ClientMainScreen extends StatefulWidget {
 
 class _ClientMainScreenState extends State<ClientMainScreen> {
   late int selectedIndex;
-
   late final List<Widget> pages;
 
   @override
   void initState() {
     super.initState();
     selectedIndex = widget.initialIndex;
+
     pages = const [
       ClientHomeScreen(showScaffold: false),
       ReservationsScreen(),
+      TrackingListScreen(),
       ProfileScreen(),
     ];
   }
@@ -77,7 +79,13 @@ class _ClientMainScreenState extends State<ClientMainScreen> {
                 label: 'Réserv.',
               ),
               BottomNavigationBarItem(
+                icon: Icon(Icons.location_on_outlined),
+                activeIcon: Icon(Icons.location_on_rounded),
+                label: 'Suivi',
+              ),
+              BottomNavigationBarItem(
                 icon: Icon(Icons.person_outline_rounded),
+                activeIcon: Icon(Icons.person_rounded),
                 label: 'Profil',
               ),
             ],

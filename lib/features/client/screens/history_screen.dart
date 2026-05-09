@@ -6,6 +6,8 @@ import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/client/models/reservation_model.dart';
 import 'package:transia_mobile/features/client/services/payment_status_service.dart';
 import 'package:transia_mobile/features/client/services/reservation_service.dart';
+import 'package:transia_mobile/features/client/screens/rating_screen.dart';
+
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -194,35 +196,79 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             ),
                             _HistoryRow(
                               label: 'Responsable',
-                              value: reservation.clientNom,
+                              value: reservation.clientNom.isEmpty
+                                  ? '-'
+                                  : reservation.clientNom,
                             ),
                             _HistoryRow(
                               label: 'Montant',
                               value: reservation.prixFormate,
                             ),
-                            const SizedBox(height: 12),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: SizedBox(
-                                height: 38,
-                                child: ElevatedButton(
-                                  onPressed: () {
-                                    context.push(
-                                      AppRoutes.ticketDetails,
-                                      extra: reservation,
-                                    );
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF3158F5),
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 40,
+                                    child: OutlinedButton(
+                                      onPressed: () {
+                                        context.push(
+                                          AppRoutes.rating,
+                                          extra: reservation,
+                                        );
+                                      },
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor:
+                                            const Color(0xFFF59E0B),
+                                        side: const BorderSide(
+                                          color: Color(0xFFF59E0B),
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                      child: const Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.star_outline_rounded,
+                                            size: 18,
+                                          ),
+                                          SizedBox(width: 6),
+                                          Text('Noter'),
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                  child: const Text('Voir le billet'),
                                 ),
-                              ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 40,
+                                    child: ElevatedButton(
+                                      onPressed: () {
+                                        context.push(
+                                          AppRoutes.ticketDetails,
+                                          extra: reservation,
+                                        );
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            const Color(0xFF3158F5),
+                                        foregroundColor: Colors.white,
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                      child: const Text('Voir le billet'),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),

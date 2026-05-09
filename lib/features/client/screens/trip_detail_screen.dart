@@ -20,10 +20,8 @@ class TripDetailScreen extends StatefulWidget {
 
 class _TripDetailScreenState extends State<TripDetailScreen> {
   int nombreSieges = 1;
-
   bool demanderSelectionSiege = false;
   bool isLoadingSeats = false;
-  bool isCheckingBeforeContinue = false;
 
   final Set<int> selectedSeats = {};
   final Set<int> occupiedSeats = {};
@@ -38,122 +36,97 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     return backendSeats;
   }
 
+  int get availableSeatsCount {
+    final available = totalSeats - occupiedSeats.length;
+    return available < 0 ? 0 : available;
+  }
+
   @override
   void initState() {
     super.initState();
     secureStorageService = SecureStorageService();
     apiClient = ApiClient(secureStorageService);
     reservationService = ReservationService(apiClient: apiClient);
+    _loadOccupiedSeats();
+  }
+
+  Set<int> _extractSeatsFromDynamicList(dynamic data) {
+    final Set<int> result = {};
+
+    if (data is List) {
+      for (final item in data) {
+        if (item is int) {
+          result.add(item);
+        } else if (item is String) {
+          final parsed = int.tryParse(item.trim());
+          if (parsed != null) result.add(parsed);
+        } else if (item is Map) {
+          final map = Map<String, dynamic>.from(item);
+          final seatValue = map['numeroSiege'] ??
+              map['numero_siege'] ??
+              map['seatNumber'] ??
+              map['siege'];
+
+          if (seatValue is int) {
+            result.add(seatValue);
+          } else if (seatValue is String) {
+            final parsed = int.tryParse(seatValue.trim());
+            if (parsed != null) result.add(parsed);
+          }
+        }
+      }
+    }
+
+    return result;
   }
 
   Future<void> _loadOccupiedSeats() async {
     setState(() {
       isLoadingSeats = true;
-      occupiedSeats.clear();
     });
 
     try {
       final reservations = await reservationService.getReservations();
+      final Set<int> freshOccupiedSeats = {};
 
       for (final reservation in reservations) {
         if (reservation.trajetId != widget.trajet.id) continue;
 
-        final billets = reservation.rawData['billets'];
-        if (billets is! List) continue;
-
-        for (final billet in billets) {
-          if (billet is Map) {
-            final map = Map<String, dynamic>.from(billet);
-            final numero = map['numeroSiege'];
-
-            if (numero is int) {
-              occupiedSeats.add(numero);
-            } else if (numero is String) {
-              final parsed = int.tryParse(numero);
-              if (parsed != null) {
-                occupiedSeats.add(parsed);
-              }
-            }
-          }
-        }
+        final raw = reservation.rawData;
+        freshOccupiedSeats.addAll(_extractSeatsFromDynamicList(raw['billets']));
+        freshOccupiedSeats.addAll(_extractSeatsFromDynamicList(raw['tickets']));
+        freshOccupiedSeats
+            .addAll(_extractSeatsFromDynamicList(raw['billetEntities']));
+        freshOccupiedSeats
+            .addAll(_extractSeatsFromDynamicList(raw['reservationBillets']));
+        freshOccupiedSeats
+            .addAll(_extractSeatsFromDynamicList(raw['selectedSeats']));
+        freshOccupiedSeats
+            .addAll(_extractSeatsFromDynamicList(raw['numerosSieges']));
+        freshOccupiedSeats
+            .addAll(_extractSeatsFromDynamicList(raw['seatNumbers']));
       }
 
-      selectedSeats.removeWhere((seat) => occupiedSeats.contains(seat));
+      if (!mounted) return;
+
+      setState(() {
+        occupiedSeats
+          ..clear()
+          ..addAll(freshOccupiedSeats);
+
+        selectedSeats.removeWhere((seat) => occupiedSeats.contains(seat));
+
+        if (availableSeatsCount > 0 && nombreSieges > availableSeatsCount) {
+          nombreSieges = availableSeatsCount;
+        }
+      });
     } catch (_) {
-      // silencieux
     } finally {
       if (mounted) {
         setState(() {
           isLoadingSeats = false;
         });
       }
-    }
-  }
-
-  Future<bool> _recheckSelectedSeatsStillAvailable() async {
-    final latestOccupiedSeats = <int>{};
-
-    try {
-      final reservations = await reservationService.getReservations();
-
-      for (final reservation in reservations) {
-        if (reservation.trajetId != widget.trajet.id) continue;
-
-        final billets = reservation.rawData['billets'];
-        if (billets is! List) continue;
-
-        for (final billet in billets) {
-          if (billet is Map) {
-            final map = Map<String, dynamic>.from(billet);
-            final numero = map['numeroSiege'];
-
-            if (numero is int) {
-              latestOccupiedSeats.add(numero);
-            } else if (numero is String) {
-              final parsed = int.tryParse(numero);
-              if (parsed != null) {
-                latestOccupiedSeats.add(parsed);
-              }
-            }
-          }
-        }
-      }
-
-      final conflictedSeats =
-          selectedSeats.where((seat) => latestOccupiedSeats.contains(seat)).toList();
-
-      if (conflictedSeats.isNotEmpty) {
-        setState(() {
-          occupiedSeats
-            ..clear()
-            ..addAll(latestOccupiedSeats);
-
-          selectedSeats.removeWhere(
-            (seat) => conflictedSeats.contains(seat),
-          );
-        });
-
-        if (!mounted) return false;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Le(s) siège(s) ${conflictedSeats.join(', ')} vien(nen)t d’être réservé(s). Veuillez en choisir d’autres.',
-            ),
-          ),
-        );
-        return false;
-      }
-
-      setState(() {
-        occupiedSeats
-          ..clear()
-          ..addAll(latestOccupiedSeats);
-      });
-
-      return true;
-    } catch (_) {
-      return true;
     }
   }
 
@@ -198,11 +171,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   }
 
   void _incrementSeats() {
-    if (nombreSieges >= totalSeats) return;
+    if (availableSeatsCount <= 0) return;
+    if (nombreSieges >= availableSeatsCount) return;
 
     setState(() {
       nombreSieges++;
-
       if (selectedSeats.length > nombreSieges) {
         final kept = selectedSeats.take(nombreSieges).toSet();
         selectedSeats
@@ -217,7 +190,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
     setState(() {
       nombreSieges--;
-
       if (selectedSeats.length > nombreSieges) {
         final kept = selectedSeats.take(nombreSieges).toSet();
         selectedSeats
@@ -228,6 +200,23 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   }
 
   Future<void> _continuer() async {
+    await _loadOccupiedSeats();
+
+    final collision =
+        selectedSeats.any((seat) => occupiedSeats.contains(seat));
+
+    if (collision) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Un ou plusieurs sièges viennent d’être pris. Veuillez rechoisir.',
+          ),
+        ),
+      );
+      return;
+    }
+
     if (demanderSelectionSiege && selectedSeats.length != nombreSieges) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -239,35 +228,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       return;
     }
 
-    if (demanderSelectionSiege) {
-      setState(() {
-        isCheckingBeforeContinue = true;
-      });
-
-      final stillAvailable = await _recheckSelectedSeatsStillAvailable();
-
-      if (mounted) {
-        setState(() {
-          isCheckingBeforeContinue = false;
-        });
-      }
-
-      if (!stillAvailable) return;
-
-      if (selectedSeats.length != nombreSieges) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Veuillez sélectionner à nouveau exactement $nombreSieges siège(s).',
-            ),
-          ),
-        );
-        return;
-      }
-    }
-
-    if (!mounted) return;
-
     context.push(
       AppRoutes.bookingSummary,
       extra: {
@@ -275,6 +235,38 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         'nombreSieges': nombreSieges,
         'selectedSeats': selectedSeats.toList()..sort(),
       },
+    );
+  }
+
+  Widget _buildRow(String label, String value, {bool highlight = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 16,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: highlight
+                    ? const Color(0xFF3158F5)
+                    : const Color(0xFF374151),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -336,14 +328,18 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 color: Color(0xFF6B7280),
               ),
             ),
+            const SizedBox(height: 6),
+            Text(
+              'Disponibles : $availableSeatsCount / $totalSeats',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF374151),
+              ),
+            ),
             const SizedBox(height: 16),
             if (isLoadingSeats)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20),
-                  child: CircularProgressIndicator(),
-                ),
-              )
+              const Center(child: CircularProgressIndicator())
             else
               Wrap(
                 spacing: 10,
@@ -416,38 +412,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 ),
               ),
           ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRow(String label, String value, {bool highlight = false}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 16,
-                color: Color(0xFF6B7280),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: highlight
-                    ? const Color(0xFF3158F5)
-                    : const Color(0xFF374151),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -538,14 +502,16 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                       ),
                     ),
                     IconButton(
-                      onPressed: nombreSieges < totalSeats ? _incrementSeats : null,
+                      onPressed: nombreSieges < availableSeatsCount
+                          ? _incrementSeats
+                          : null,
                       icon: const Icon(Icons.add_circle_outline),
                     ),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Maximum disponible pour ce trajet : $totalSeats siège(s)',
+                  'Maximum disponible pour ce trajet : $availableSeatsCount siège(s)',
                   style: const TextStyle(
                     fontSize: 13,
                     color: Color(0xFF6B7280),
@@ -566,17 +532,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           SizedBox(
             height: 56,
             child: ElevatedButton(
-              onPressed: isCheckingBeforeContinue ? null : _continuer,
-              child: isCheckingBeforeContinue
-                  ? const SizedBox(
-                      height: 22,
-                      width: 22,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2.3,
-                      ),
-                    )
-                  : const Text('Continuer'),
+              onPressed: _continuer,
+              child: const Text('Continuer'),
             ),
           ),
         ],
