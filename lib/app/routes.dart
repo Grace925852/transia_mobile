@@ -10,31 +10,37 @@ import 'package:transia_mobile/features/client/screens/booking_summary_screen.da
 import 'package:transia_mobile/features/client/screens/client_main_screen.dart';
 import 'package:transia_mobile/features/client/screens/history_screen.dart';
 import 'package:transia_mobile/features/client/screens/payement_screen.dart';
+import 'package:transia_mobile/features/client/screens/rating_screen.dart';
 import 'package:transia_mobile/features/client/screens/refund_request.dart';
 import 'package:transia_mobile/features/client/screens/ticket_details_screen.dart';
+import 'package:transia_mobile/features/client/screens/tracking_detail_screen.dart';
 import 'package:transia_mobile/features/client/screens/trip_detail_screen.dart';
 import 'package:transia_mobile/features/client/screens/trip_list_screen.dart';
-import 'package:transia_mobile/features/client/screens/tracking_detail_screen.dart';
-import 'package:transia_mobile/features/client/screens/rating_screen.dart';
 
 class AppRoutes {
   static const String login = '/login';
   static const String client = '/client';
   static const String chauffeurLogin = '/chauffeur-login';
   static const String chauffeur = '/chauffeur';
-  static const String tripDetail = '/trip-detail';
+
   static const String tripList = '/trip-list';
+  static const String tripDetail = '/trip-detail';
   static const String bookingSummary = '/booking-summary';
+
   static const String reservations = '/reservations';
   static const String payment = '/payment';
   static const String ticketDetails = '/ticket-details';
   static const String refundRequest = '/refund-request';
   static const String history = '/history';
-  static const String chauffeurPassengers = '/chauffeur/passagers';
+
   static const String trackingDetail = '/tracking-detail';
   static const String rating = '/rating';
+
+  static const String chauffeurPassengers = '/chauffeur/passagers';
 }
 
+/// true = client
+/// false = chauffeur
 const bool launchClientOnly = true;
 
 final GoRouter appRouter = GoRouter(
@@ -61,6 +67,7 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.tripList,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>;
+
         return TripListScreen(
           trajets: data['trajets'],
           villeDepart: data['villeDepart'],
@@ -114,6 +121,10 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
     GoRoute(
+      path: AppRoutes.history,
+      builder: (context, state) => const HistoryScreen(),
+    ),
+    GoRoute(
       path: AppRoutes.trackingDetail,
       builder: (context, state) => TrackingDetailScreen(
         reservation: state.extra as ReservationModel,
@@ -124,10 +135,6 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => RatingScreen(
         reservation: state.extra as ReservationModel,
       ),
-    ),
-    GoRoute(
-      path: AppRoutes.history,
-      builder: (context, state) => const HistoryScreen(),
     ),
     GoRoute(
       path: AppRoutes.chauffeurPassengers,
