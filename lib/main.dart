@@ -24,8 +24,10 @@ class MyApp extends StatelessWidget {
 
 import 'package:flutter/material.dart';
 import 'package:transia_mobile/app/app.dart';
+import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppPreferencesController.instance.load();
   runApp(const TransiaApp());
 }

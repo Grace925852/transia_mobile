@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
+import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/client/models/reservation_request.dart';
 import 'package:transia_mobile/features/client/models/trajet_model.dart';
@@ -40,6 +41,17 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
   final TextEditingController delegueController = TextEditingController();
   final List<TextEditingController> passagerControllers = [];
 
+  AppPreferencesController get prefs => AppPreferencesController.instance;
+
+  String tr({
+    required String fr,
+    required String en,
+    required String es,
+    required String ar,
+  }) {
+    return prefs.tr(fr: fr, en: en, es: es, ar: ar);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -47,8 +59,8 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     apiClient = ApiClient(secureStorageService);
     reservationService = ReservationService(apiClient: apiClient);
 
-    chargerSessionClient();
-    genererChampsPassagers();
+    _chargerSessionClient();
+    _genererChampsPassagers();
   }
 
   @override
@@ -60,7 +72,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     super.dispose();
   }
 
-  Future<void> chargerSessionClient() async {
+  Future<void> _chargerSessionClient() async {
     final storedName = await secureStorageService.getFullName();
     final storedUserId = await secureStorageService.getNumericUserId();
 
@@ -72,19 +84,26 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     });
   }
 
-  int get nombreChampsPassagers {
+  int get _nombreAutresPassagers {
     return widget.nombreSieges > 1 ? widget.nombreSieges - 1 : 0;
   }
 
-  double get total => widget.trajet.tarif * widget.nombreSieges;
+  double get _montantTotal => widget.trajet.tarif * widget.nombreSieges;
 
-  void genererChampsPassagers() {
+  String get _nomResponsable {
+    if (clientFaitPartieDuVoyage) {
+      return clientNom.trim();
+    }
+    return delegueController.text.trim();
+  }
+
+  void _genererChampsPassagers() {
     for (final controller in passagerControllers) {
       controller.dispose();
     }
     passagerControllers.clear();
 
-    for (int i = 0; i < nombreChampsPassagers; i++) {
+    for (int i = 0; i < _nombreAutresPassagers; i++) {
       passagerControllers.add(TextEditingController());
     }
 
@@ -93,27 +112,21 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     }
   }
 
-  void changerModeReservation(bool value) {
+  void _changerModeReservation(bool value) {
     setState(() {
       clientFaitPartieDuVoyage = value;
     });
-    genererChampsPassagers();
-  }
-
-  String get nomResponsable {
-    if (clientFaitPartieDuVoyage) {
-      return clientNom.trim();
-    }
-    return delegueController.text.trim();
+    _genererChampsPassagers();
   }
 
   List<String> _buildNomsPassagers() {
-    final responsable = nomResponsable;
+    final responsable = _nomResponsable;
     final List<String> passagers = [];
 
     if (saisirNomsPassagers) {
       for (int i = 0; i < passagerControllers.length; i++) {
         final typed = passagerControllers[i].text.trim();
+
         if (typed.isNotEmpty) {
           passagers.add(typed);
         } else {
@@ -121,7 +134,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
         }
       }
     } else {
-      for (int i = 0; i < nombreChampsPassagers; i++) {
+      for (int i = 0; i < _nombreAutresPassagers; i++) {
         passagers.add('Invité N${i + 1} de $responsable');
       }
     }
@@ -129,22 +142,40 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     return passagers;
   }
 
-  Future<void> confirmerReservation() async {
+  Future<void> _confirmerReservation() async {
     if (clientUserId == null) {
-      afficherMessage('Utilisateur introuvable.');
+      _afficherMessage(
+        tr(
+          fr: 'Identifiant client introuvable. Déconnectez-vous puis reconnectez-vous.',
+          en: 'Client ID not found. Log out and log back in.',
+          es: 'Identificador del cliente no encontrado. Cierre sesión e inicie sesión de nuevo.',
+          ar: 'تعذر العثور على معرف العميل. سجّل الخروج ثم ادخل من جديد.',
+        ),
+      );
       return;
     }
 
-    if (!clientFaitPartieDuVoyage &&
-        delegueController.text.trim().isEmpty) {
-      afficherMessage('Veuillez saisir le nom du responsable.');
+    if (!clientFaitPartieDuVoyage && delegueController.text.trim().isEmpty) {
+      _afficherMessage(
+        tr(
+          fr: 'Veuillez saisir le nom du responsable.',
+          en: 'Please enter the responsible person name.',
+          es: 'Por favor ingrese el nombre del responsable.',
+          ar: 'يرجى إدخال اسم المسؤول.',
+        ),
+      );
       return;
     }
 
     if (widget.selectedSeats.isNotEmpty &&
         widget.selectedSeats.length != widget.nombreSieges) {
-      afficherMessage(
-        'Le nombre de sièges choisis ne correspond pas au nombre de places.',
+      _afficherMessage(
+        tr(
+          fr: 'Le nombre de sièges choisis doit correspondre au nombre de places.',
+          en: 'The number of selected seats must match the number of seats.',
+          es: 'La cantidad de asientos elegidos debe coincidir con la cantidad de plazas.',
+          ar: 'يجب أن يطابق عدد المقاعد المختارة عدد الأماكن.',
+        ),
       );
       return;
     }
@@ -153,9 +184,11 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
       userId: clientUserId!,
       trajetId: widget.trajet.id,
       nombrePlace: widget.nombreSieges,
-      nomResponsable: nomResponsable,
+      nomResponsable: _nomResponsable,
       nomsPassagers: _buildNomsPassagers(),
-      numerosSieges: widget.selectedSeats,
+      siegesChoisis: widget.selectedSeats
+          .map((seat) => seat.toString())
+          .toList(),
     );
 
     setState(() {
@@ -168,14 +201,21 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Réservation créée avec succès.'),
+        SnackBar(
+          content: Text(
+            tr(
+              fr: 'Réservation créée avec succès.',
+              en: 'Reservation created successfully.',
+              es: 'Reserva creada con éxito.',
+              ar: 'تم إنشاء الحجز بنجاح.',
+            ),
+          ),
         ),
       );
 
       context.go(AppRoutes.reservations);
     } catch (e) {
-      afficherMessage(e.toString().replaceAll('Exception: ', ''));
+      _afficherMessage(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) {
         setState(() {
@@ -185,7 +225,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     }
   }
 
-  void afficherMessage(String message) {
+  void _afficherMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
@@ -193,19 +233,22 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final seatsLabel = widget.selectedSeats.isEmpty
+        ? tr(fr: 'Aucun', en: 'None', es: 'Ninguno', ar: 'لا يوجد')
+        : (widget.selectedSeats.toList()..sort()).join(', ');
+    final titleColor =
+        theme.textTheme.titleLarge?.color ?? const Color(0xFF374151);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FF),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF374151)),
-        title: const Text(
-          'Confirmation',
-          style: TextStyle(
-            color: Color(0xFF374151),
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
+        title: Text(
+          tr(
+            fr: 'Confirmation',
+            en: 'Confirmation',
+            es: 'Confirmación',
+            ar: 'التأكيد',
           ),
         ),
       ),
@@ -215,48 +258,78 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.cardColor,
               borderRadius: BorderRadius.circular(22),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Détails de la réservation',
+                Text(
+                  tr(
+                    fr: 'Détails de la réservation',
+                    en: 'Reservation details',
+                    es: 'Detalles de la reserva',
+                    ar: 'تفاصيل الحجز',
+                  ),
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151),
+                    color: titleColor,
                   ),
                 ),
                 const SizedBox(height: 18),
                 _SummaryRow(
-                  label: 'Trajet',
-                  value: '${widget.trajet.villeDepart} → ${widget.trajet.villeArrivee}',
+                  label: tr(fr: 'Trajet', en: 'Trip', es: 'Trayecto', ar: 'الرحلة'),
+                  value:
+                      '${widget.trajet.villeDepart} → ${widget.trajet.villeArrivee}',
                 ),
-                _SummaryRow(label: 'Date', value: widget.trajet.dateDepart),
-                _SummaryRow(label: 'Heure', value: widget.trajet.heureFormatee),
                 _SummaryRow(
-                  label: 'Véhicule',
+                  label: tr(fr: 'Date', en: 'Date', es: 'Fecha', ar: 'التاريخ'),
+                  value: widget.trajet.dateDepart,
+                ),
+                _SummaryRow(
+                  label: tr(fr: 'Heure', en: 'Time', es: 'Hora', ar: 'الوقت'),
+                  value: widget.trajet.heureFormatee,
+                ),
+                _SummaryRow(
+                  label: tr(fr: 'Véhicule', en: 'Vehicle', es: 'Vehículo', ar: 'المركبة'),
                   value: widget.trajet.vehiculeImmatriculation,
                 ),
                 _SummaryRow(
-                  label: 'Nombre de sièges',
+                  label: tr(
+                    fr: 'Nombre de sièges',
+                    en: 'Number of seats',
+                    es: 'Número de asientos',
+                    ar: 'عدد المقاعد',
+                  ),
                   value: '${widget.nombreSieges}',
                 ),
                 _SummaryRow(
-                  label: 'Sièges choisis',
-                  value: widget.selectedSeats.isEmpty
-                      ? 'Aucun'
-                      : widget.selectedSeats.join(', '),
+                  label: tr(
+                    fr: 'Sièges choisis',
+                    en: 'Selected seats',
+                    es: 'Asientos elegidos',
+                    ar: 'المقاعد المختارة',
+                  ),
+                  value: seatsLabel,
                 ),
                 _SummaryRow(
-                  label: 'Prix unitaire',
+                  label: tr(
+                    fr: 'Prix unitaire',
+                    en: 'Unit price',
+                    es: 'Precio unitario',
+                    ar: 'سعر الوحدة',
+                  ),
                   value: widget.trajet.prixFormate,
                 ),
                 _SummaryRow(
-                  label: 'Montant total',
-                  value: '${total.toStringAsFixed(0)} FCFA',
+                  label: tr(
+                    fr: 'Montant total',
+                    en: 'Total amount',
+                    es: 'Monto total',
+                    ar: 'المبلغ الإجمالي',
+                  ),
+                  value: '${_montantTotal.toStringAsFixed(0)} FCFA',
                   highlighted: true,
                 ),
               ],
@@ -266,18 +339,23 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.cardColor,
               borderRadius: BorderRadius.circular(22),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Type de réservation',
+                Text(
+                  tr(
+                    fr: 'Type de réservation',
+                    en: 'Reservation type',
+                    es: 'Tipo de reserva',
+                    ar: 'نوع الحجز',
+                  ),
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151),
+                    color: titleColor,
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -286,10 +364,17 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                   groupValue: clientFaitPartieDuVoyage,
                   onChanged: (value) {
                     if (value != null) {
-                      changerModeReservation(value);
+                      _changerModeReservation(value);
                     }
                   },
-                  title: const Text('Je fais partie du voyage'),
+                  title: Text(
+                    tr(
+                      fr: 'Je fais partie du voyage',
+                      en: 'I am part of the trip',
+                      es: 'Formo parte del viaje',
+                      ar: 'أنا جزء من الرحلة',
+                    ),
+                  ),
                   contentPadding: EdgeInsets.zero,
                 ),
                 RadioListTile<bool>(
@@ -297,19 +382,31 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                   groupValue: clientFaitPartieDuVoyage,
                   onChanged: (value) {
                     if (value != null) {
-                      changerModeReservation(value);
+                      _changerModeReservation(value);
                     }
                   },
-                  title: const Text('Je réserve pour d’autres personnes'),
+                  title: Text(
+                    tr(
+                      fr: 'Je réserve pour d’autres personnes',
+                      en: 'I book for other people',
+                      es: 'Reservo para otras personas',
+                      ar: 'أحجز لأشخاص آخرين',
+                    ),
+                  ),
                   contentPadding: EdgeInsets.zero,
                 ),
                 if (clientFaitPartieDuVoyage && clientNom.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Text(
-                    'Le responsable sera automatiquement : $clientNom',
-                    style: const TextStyle(
+                    tr(
+                      fr: 'Le responsable sera automatiquement : $clientNom',
+                      en: 'The responsible person will automatically be: $clientNom',
+                      es: 'La persona responsable será automáticamente: $clientNom',
+                      ar: 'سيكون المسؤول تلقائيًا: $clientNom',
+                    ),
+                    style: TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF6B7280),
+                      color: theme.textTheme.bodyMedium?.color,
                     ),
                   ),
                 ],
@@ -320,41 +417,63 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.cardColor,
               borderRadius: BorderRadius.circular(22),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Informations passagers',
+                Text(
+                  tr(
+                    fr: 'Informations passagers',
+                    en: 'Passenger information',
+                    es: 'Información de pasajeros',
+                    ar: 'معلومات المسافرين',
+                  ),
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151),
+                    color: titleColor,
                   ),
                 ),
                 const SizedBox(height: 14),
                 if (!clientFaitPartieDuVoyage) ...[
-                  const Text(
-                    'Nom du responsable',
+                  Text(
+                    tr(
+                      fr: 'Nom du responsable',
+                      en: 'Responsible person name',
+                      es: 'Nombre del responsable',
+                      ar: 'اسم المسؤول',
+                    ),
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF374151),
+                      color: theme.textTheme.bodyLarge?.color,
                     ),
                   ),
                   const SizedBox(height: 8),
                   _InputField(
                     controller: delegueController,
-                    hintText: 'Ex : Koffi AKAKPO',
+                    hintText: tr(
+                      fr: 'Ex : Koffi AKAKPO',
+                      en: 'Ex: Koffi AKAKPO',
+                      es: 'Ej: Koffi AKAKPO',
+                      ar: 'مثال: Koffi AKAKPO',
+                    ),
                   ),
                   const SizedBox(height: 16),
                 ],
                 SwitchListTile(
                   value: saisirNomsPassagers,
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Voulez-vous saisir les autres noms ?'),
+                  title: Text(
+                    tr(
+                      fr: 'Voulez-vous saisir les autres noms ?',
+                      en: 'Do you want to enter the other names?',
+                      es: '¿Desea ingresar los otros nombres?',
+                      ar: 'هل تريد إدخال الأسماء الأخرى؟',
+                    ),
+                  ),
                   onChanged: (value) {
                     setState(() {
                       saisirNomsPassagers = value;
@@ -362,20 +481,30 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                   },
                 ),
                 const SizedBox(height: 8),
-                if (nombreChampsPassagers == 0)
-                  const Text(
-                    'Aucun autre passager à renseigner.',
+                if (_nombreAutresPassagers == 0)
+                  Text(
+                    tr(
+                      fr: 'Aucun autre passager à renseigner.',
+                      en: 'No other passenger to fill in.',
+                      es: 'No hay otros pasajeros que completar.',
+                      ar: 'لا يوجد مسافرون آخرون لإدخالهم.',
+                    ),
                     style: TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF6B7280),
+                      color: theme.textTheme.bodyMedium?.color,
                     ),
                   )
                 else if (!saisirNomsPassagers)
-                  const Text(
-                    'Les autres noms seront générés automatiquement.',
+                  Text(
+                    tr(
+                      fr: 'Les autres noms seront générés automatiquement.',
+                      en: 'The other names will be generated automatically.',
+                      es: 'Los otros nombres se generarán automáticamente.',
+                      ar: 'سيتم إنشاء الأسماء الأخرى تلقائيًا.',
+                    ),
                     style: TextStyle(
                       fontSize: 13,
-                      color: Color(0xFF6B7280),
+                      color: theme.textTheme.bodyMedium?.color,
                     ),
                   )
                 else
@@ -387,17 +516,22 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Passager ${index + 2}',
-                            style: const TextStyle(
+                            '${tr(fr: 'Passager', en: 'Passenger', es: 'Pasajero', ar: 'المسافر')} ${index + 2}',
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF374151),
+                              color: theme.textTheme.bodyLarge?.color,
                             ),
                           ),
                           const SizedBox(height: 8),
                           _InputField(
                             controller: passagerControllers[index],
-                            hintText: 'Nom complet',
+                            hintText: tr(
+                              fr: 'Nom complet',
+                              en: 'Full name',
+                              es: 'Nombre completo',
+                              ar: 'الاسم الكامل',
+                            ),
                           ),
                         ],
                       ),
@@ -410,15 +544,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
           SizedBox(
             height: 54,
             child: ElevatedButton(
-              onPressed: isLoading ? null : confirmerReservation,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryBlue,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
+              onPressed: isLoading ? null : _confirmerReservation,
               child: isLoading
                   ? const SizedBox(
                       height: 22,
@@ -428,9 +554,14 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                         strokeWidth: 2.4,
                       ),
                     )
-                  : const Text(
-                      'Confirmer la réservation',
-                      style: TextStyle(
+                  : Text(
+                      tr(
+                        fr: 'Confirmer la réservation',
+                        en: 'Confirm reservation',
+                        es: 'Confirmar reserva',
+                        ar: 'تأكيد الحجز',
+                      ),
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                       ),
@@ -456,6 +587,12 @@ class _SummaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mutedColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
+    final normalTextColor =
+        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
@@ -463,9 +600,9 @@ class _SummaryRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: Color(0xFF6B7280),
+                color: mutedColor,
               ),
             ),
           ),
@@ -476,9 +613,7 @@ class _SummaryRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: highlighted ? FontWeight.w700 : FontWeight.w600,
-                color: highlighted
-                    ? const Color(0xFF3158F5)
-                    : const Color(0xFF374151),
+                color: highlighted ? const Color(0xFF3158F5) : normalTextColor,
               ),
             ),
           ),
@@ -499,17 +634,23 @@ class _InputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       height: 52,
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F8FC),
+        color: isDark ? const Color(0xFF111827) : const Color(0xFFF7F8FC),
         borderRadius: BorderRadius.circular(15),
         border: Border.all(
-          color: const Color(0xFFE2E5EC),
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E5EC),
         ),
       ),
       child: TextField(
         controller: controller,
+        style: TextStyle(
+          color: theme.textTheme.bodyLarge?.color,
+        ),
         decoration: InputDecoration(
           border: InputBorder.none,
           hintText: hintText,
@@ -517,8 +658,8 @@ class _InputField extends StatelessWidget {
             horizontal: 14,
             vertical: 16,
           ),
-          hintStyle: const TextStyle(
-            color: Color(0xFF9CA3AF),
+          hintStyle: TextStyle(
+            color: theme.textTheme.bodyMedium?.color,
             fontSize: 14,
           ),
         ),

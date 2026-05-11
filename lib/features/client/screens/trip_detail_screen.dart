@@ -1,7 +1,10 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
+import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/client/models/trajet_model.dart';
 import 'package:transia_mobile/features/client/services/reservation_service.dart';
@@ -24,11 +27,22 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   bool isLoadingSeats = false;
 
   final Set<int> selectedSeats = {};
-  final Set<int> occupiedSeats = {};
+  final Set<String> occupiedSeats = {};
 
   late final SecureStorageService secureStorageService;
   late final ApiClient apiClient;
   late final ReservationService reservationService;
+
+  AppPreferencesController get prefs => AppPreferencesController.instance;
+
+  String tr({
+    required String fr,
+    required String en,
+    required String es,
+    required String ar,
+  }) {
+    return prefs.tr(fr: fr, en: en, es: es, ar: ar);
+  }
 
   int get totalSeats {
     final backendSeats = widget.trajet.capacite;
@@ -41,6 +55,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     return available < 0 ? 0 : available;
   }
 
+  bool get isTripFull => availableSeatsCount <= 0;
+
   @override
   void initState() {
     super.initState();
@@ -50,28 +66,30 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     _loadOccupiedSeats();
   }
 
-  Set<int> _extractSeatsFromDynamicList(dynamic data) {
-    final Set<int> result = {};
+  Set<String> _extractSeatsFromDynamicList(dynamic data) {
+    final Set<String> result = {};
 
     if (data is List) {
       for (final item in data) {
-        if (item is int) {
-          result.add(item);
-        } else if (item is String) {
-          final parsed = int.tryParse(item.trim());
-          if (parsed != null) result.add(parsed);
-        } else if (item is Map) {
+        if (item == null) continue;
+
+        if (item is Map) {
           final map = Map<String, dynamic>.from(item);
           final seatValue = map['numeroSiege'] ??
               map['numero_siege'] ??
               map['seatNumber'] ??
               map['siege'];
 
-          if (seatValue is int) {
-            result.add(seatValue);
-          } else if (seatValue is String) {
-            final parsed = int.tryParse(seatValue.trim());
-            if (parsed != null) result.add(parsed);
+          if (seatValue != null) {
+            final text = seatValue.toString().trim();
+            if (text.isNotEmpty && text.toLowerCase() != 'null') {
+              result.add(text);
+            }
+          }
+        } else {
+          final text = item.toString().trim();
+          if (text.isNotEmpty && text.toLowerCase() != 'null') {
+            result.add(text);
           }
         }
       }
@@ -87,7 +105,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
     try {
       final reservations = await reservationService.getReservations();
-      final Set<int> freshOccupiedSeats = {};
+      final Set<String> freshOccupiedSeats = {};
 
       for (final reservation in reservations) {
         if (reservation.trajetId != widget.trajet.id) continue;
@@ -105,6 +123,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             .addAll(_extractSeatsFromDynamicList(raw['numerosSieges']));
         freshOccupiedSeats
             .addAll(_extractSeatsFromDynamicList(raw['seatNumbers']));
+        freshOccupiedSeats
+            .addAll(_extractSeatsFromDynamicList(raw['siegesChoisis']));
       }
 
       if (!mounted) return;
@@ -114,10 +134,17 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           ..clear()
           ..addAll(freshOccupiedSeats);
 
-        selectedSeats.removeWhere((seat) => occupiedSeats.contains(seat));
+        selectedSeats.removeWhere(
+          (seat) => occupiedSeats.contains(seat.toString()),
+        );
 
         if (availableSeatsCount > 0 && nombreSieges > availableSeatsCount) {
           nombreSieges = availableSeatsCount;
+        }
+
+        if (availableSeatsCount == 0) {
+          nombreSieges = 1;
+          selectedSeats.clear();
         }
       });
     } catch (_) {
@@ -145,7 +172,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   }
 
   void _toggleSeat(int seatNumber) {
-    if (occupiedSeats.contains(seatNumber)) return;
+    if (occupiedSeats.contains(seatNumber.toString())) return;
 
     if (selectedSeats.contains(seatNumber)) {
       setState(() {
@@ -158,7 +185,12 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Vous devez sélectionner exactement $nombreSieges siège(s).',
+            tr(
+              fr: 'Vous devez sélectionner exactement $nombreSieges siège(s).',
+              en: 'You must select exactly $nombreSieges seat(s).',
+              es: 'Debe seleccionar exactamente $nombreSieges asiento(s).',
+              ar: 'يجب اختيار $nombreSieges مقعدًا بالضبط.',
+            ),
           ),
         ),
       );
@@ -199,33 +231,117 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     });
   }
 
+  List<int> _generateRandomAvailableSeats(int count) {
+    final List<int> freeSeats = List.generate(totalSeats, (index) => index + 1)
+        .where((seat) => !occupiedSeats.contains(seat.toString()))
+        .toList();
+
+    if (freeSeats.length < count) {
+      return [];
+    }
+
+    freeSeats.shuffle(Random());
+    final generated = freeSeats.take(count).toList()..sort();
+    return generated;
+  }
+
   Future<void> _continuer() async {
     await _loadOccupiedSeats();
 
-    final collision =
-        selectedSeats.any((seat) => occupiedSeats.contains(seat));
-
-    if (collision) {
+    if (availableSeatsCount <= 0) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            'Un ou plusieurs sièges viennent d’être pris. Veuillez rechoisir.',
+            tr(
+              fr: 'Ce trajet est complet.',
+              en: 'This trip is full.',
+              es: 'Este trayecto está completo.',
+              ar: 'هذه الرحلة مكتملة.',
+            ),
           ),
         ),
       );
       return;
     }
 
-    if (demanderSelectionSiege && selectedSeats.length != nombreSieges) {
+    if (nombreSieges > availableSeatsCount) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Veuillez sélectionner exactement $nombreSieges siège(s).',
+            tr(
+              fr: 'Il ne reste que $availableSeatsCount siège(s) disponible(s).',
+              en: 'Only $availableSeatsCount seat(s) remain available.',
+              es: 'Solo quedan $availableSeatsCount asiento(s) disponibles.',
+              ar: 'لم يتبق سوى $availableSeatsCount مقعدًا متاحًا.',
+            ),
           ),
         ),
       );
       return;
+    }
+
+    List<int> finalSeats;
+
+    if (demanderSelectionSiege) {
+      final collision = selectedSeats.any(
+        (seat) => occupiedSeats.contains(seat.toString()),
+      );
+
+      if (collision) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              tr(
+                fr: 'Un ou plusieurs sièges viennent d’être pris. Veuillez rechoisir.',
+                en: 'One or more seats were just taken. Please choose again.',
+                es: 'Uno o más asientos acaban de ocuparse. Elija de nuevo.',
+                ar: 'تم حجز مقعد أو أكثر للتو. يرجى الاختيار مرة أخرى.',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+
+      if (selectedSeats.length != nombreSieges) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              tr(
+                fr: 'Veuillez sélectionner exactement $nombreSieges siège(s).',
+                en: 'Please select exactly $nombreSieges seat(s).',
+                es: 'Seleccione exactamente $nombreSieges asiento(s).',
+                ar: 'يرجى اختيار $nombreSieges مقعدًا بالضبط.',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+
+      finalSeats = selectedSeats.toList()..sort();
+    } else {
+      finalSeats = _generateRandomAvailableSeats(nombreSieges);
+
+      if (finalSeats.length != nombreSieges) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              tr(
+                fr: 'Impossible d’attribuer automatiquement des sièges disponibles.',
+                en: 'Unable to assign available seats automatically.',
+                es: 'No se pueden asignar automáticamente los asientos disponibles.',
+                ar: 'تعذر تعيين المقاعد المتاحة تلقائيًا.',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
     }
 
     context.push(
@@ -233,12 +349,18 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       extra: {
         'trajet': widget.trajet,
         'nombreSieges': nombreSieges,
-        'selectedSeats': selectedSeats.toList()..sort(),
+        'selectedSeats': finalSeats,
       },
     );
   }
 
-  Widget _buildRow(String label, String value, {bool highlight = false}) {
+  Widget _buildRow(BuildContext context, String label, String value, {bool highlight = false}) {
+    final theme = Theme.of(context);
+    final mutedColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
+    final normalTextColor =
+        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
@@ -246,9 +368,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
-                color: Color(0xFF6B7280),
+                color: mutedColor,
               ),
             ),
           ),
@@ -261,7 +383,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 fontWeight: FontWeight.w700,
                 color: highlight
                     ? const Color(0xFF3158F5)
-                    : const Color(0xFF374151),
+                    : normalTextColor,
               ),
             ),
           ),
@@ -270,30 +392,85 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     );
   }
 
-  Widget _buildSeatSelectionSection() {
+  Widget _buildFullTripBanner(BuildContext context) {
+    if (!isTripFull) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1F2),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFCA5A5)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.block_rounded,
+            color: Color(0xFFDC2626),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              tr(
+                fr: 'Ce trajet est complet. Il ne peut plus être réservé.',
+                en: 'This trip is full. It can no longer be booked.',
+                es: 'Este trayecto está completo. Ya no se puede reservar.',
+                ar: 'هذه الرحلة ممتلئة ولا يمكن حجزها بعد الآن.',
+              ),
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF991B1B),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSeatSelectionSection(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final titleColor =
+        theme.textTheme.titleLarge?.color ?? const Color(0xFF374151);
+    final mutedColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Choix du siège',
+          Text(
+            tr(
+              fr: 'Choix du siège',
+              en: 'Seat selection',
+              es: 'Elección de asiento',
+              ar: 'اختيار المقعد',
+            ),
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF374151),
+              color: titleColor,
             ),
           ),
           const SizedBox(height: 16),
-          const Text(
-            'Voulez-vous sélectionner votre siège ?',
+          Text(
+            tr(
+              fr: 'Voulez-vous sélectionner votre siège ?',
+              en: 'Do you want to select your seat?',
+              es: '¿Desea seleccionar su asiento?',
+              ar: 'هل تريد اختيار مقعدك؟',
+            ),
             style: TextStyle(
               fontSize: 16,
-              color: Color(0xFF6B7280),
+              color: mutedColor,
             ),
           ),
           const SizedBox(height: 12),
@@ -304,8 +481,10 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                   value: true,
                   groupValue: demanderSelectionSiege,
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Oui'),
-                  onChanged: (_) => _onSeatSelectionChoice(true),
+                  title: Text(
+                    tr(fr: 'Oui', en: 'Yes', es: 'Sí', ar: 'نعم'),
+                  ),
+                  onChanged: isTripFull ? null : (_) => _onSeatSelectionChoice(true),
                 ),
               ),
               Expanded(
@@ -313,28 +492,56 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                   value: false,
                   groupValue: demanderSelectionSiege,
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Non'),
-                  onChanged: (_) => _onSeatSelectionChoice(false),
+                  title: Text(
+                    tr(fr: 'Non', en: 'No', es: 'No', ar: 'لا'),
+                  ),
+                  onChanged: isTripFull ? null : (_) => _onSeatSelectionChoice(false),
                 ),
               ),
             ],
           ),
+          if (!demanderSelectionSiege && !isTripFull)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                tr(
+                  fr: 'Si vous ne choisissez pas vos sièges, ils vous seront attribués automatiquement.',
+                  en: 'If you do not choose your seats, they will be assigned automatically.',
+                  es: 'Si no elige sus asientos, se asignarán automáticamente.',
+                  ar: 'إذا لم تختر مقاعدك، فسيتم تعيينها تلقائيًا.',
+                ),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: mutedColor,
+                ),
+              ),
+            ),
           if (demanderSelectionSiege) ...[
             const SizedBox(height: 8),
             Text(
-              'Choisissez exactement $nombreSieges siège(s). Les sièges gris sont déjà pris.',
-              style: const TextStyle(
+              tr(
+                fr: 'Choisissez exactement $nombreSieges siège(s). Les sièges gris sont déjà pris.',
+                en: 'Choose exactly $nombreSieges seat(s). Gray seats are already taken.',
+                es: 'Elija exactamente $nombreSieges asiento(s). Los asientos grises ya están ocupados.',
+                ar: 'اختر $nombreSieges مقعدًا بالضبط. المقاعد الرمادية محجوزة بالفعل.',
+              ),
+              style: TextStyle(
                 fontSize: 13,
-                color: Color(0xFF6B7280),
+                color: mutedColor,
               ),
             ),
             const SizedBox(height: 6),
             Text(
-              'Disponibles : $availableSeatsCount / $totalSeats',
-              style: const TextStyle(
+              tr(
+                fr: 'Disponibles : $availableSeatsCount / $totalSeats',
+                en: 'Available: $availableSeatsCount / $totalSeats',
+                es: 'Disponibles: $availableSeatsCount / $totalSeats',
+                ar: 'المتاح: $availableSeatsCount / $totalSeats',
+              ),
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF374151),
+                color: titleColor,
               ),
             ),
             const SizedBox(height: 16),
@@ -346,7 +553,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 runSpacing: 10,
                 children: List.generate(totalSeats, (index) {
                   final seatNumber = index + 1;
-                  final isOccupied = occupiedSeats.contains(seatNumber);
+                  final isOccupied =
+                      occupiedSeats.contains(seatNumber.toString());
                   final isSelected = selectedSeats.contains(seatNumber);
 
                   Color backgroundColor;
@@ -362,13 +570,15 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     textColor = Colors.white;
                     borderColor = const Color(0xFF3158F5);
                   } else {
-                    backgroundColor = const Color(0xFFEAF0FF);
+                    backgroundColor = isDark
+                        ? const Color(0xFF172554)
+                        : const Color(0xFFEAF0FF);
                     textColor = const Color(0xFF3158F5);
                     borderColor = const Color(0xFF3158F5);
                   }
 
                   return GestureDetector(
-                    onTap: () => _toggleSeat(seatNumber),
+                    onTap: isTripFull ? null : () => _toggleSeat(seatNumber),
                     child: Container(
                       width: 56,
                       height: 56,
@@ -393,21 +603,31 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               ),
             const SizedBox(height: 16),
             Text(
-              'Sélectionnés : ${selectedSeats.length}/$nombreSieges',
-              style: const TextStyle(
+              tr(
+                fr: 'Sélectionnés : ${selectedSeats.length}/$nombreSieges',
+                en: 'Selected: ${selectedSeats.length}/$nombreSieges',
+                es: 'Seleccionados: ${selectedSeats.length}/$nombreSieges',
+                ar: 'المختارة: ${selectedSeats.length}/$nombreSieges',
+              ),
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF374151),
+                color: titleColor,
               ),
             ),
             if (selectedSeats.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  'Siège(s) choisi(s) : ${(selectedSeats.toList()..sort()).join(', ')}',
-                  style: const TextStyle(
+                  tr(
+                    fr: 'Siège(s) choisi(s) : ${(selectedSeats.toList()..sort()).join(', ')}',
+                    en: 'Chosen seat(s): ${(selectedSeats.toList()..sort()).join(', ')}',
+                    es: 'Asiento(s) elegido(s): ${(selectedSeats.toList()..sort()).join(', ')}',
+                    ar: 'المقاعد المختارة: ${(selectedSeats.toList()..sort()).join(', ')}',
+                  ),
+                  style: TextStyle(
                     fontSize: 13,
-                    color: Color(0xFF6B7280),
+                    color: mutedColor,
                   ),
                 ),
               ),
@@ -419,42 +639,93 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final trajet = widget.trajet;
     final total = trajet.tarif * nombreSieges;
+    final titleColor =
+        theme.textTheme.titleLarge?.color ?? const Color(0xFF374151);
+    final mutedColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FF),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Détail du trajet'),
+        title: Text(
+          tr(
+            fr: 'Détail du trajet',
+            en: 'Trip details',
+            es: 'Detalle del trayecto',
+            ar: 'تفاصيل الرحلة',
+          ),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
+          _buildFullTripBanner(context),
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.cardColor,
               borderRadius: BorderRadius.circular(24),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Résumé du voyage',
+                Text(
+                  tr(
+                    fr: 'Résumé du voyage',
+                    en: 'Trip summary',
+                    es: 'Resumen del viaje',
+                    ar: 'ملخص الرحلة',
+                  ),
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151),
+                    color: titleColor,
                   ),
                 ),
                 const SizedBox(height: 18),
-                _buildRow('Départ', trajet.villeDepart),
-                _buildRow('Destination', trajet.villeArrivee),
-                _buildRow('Date', trajet.dateDepart),
-                _buildRow('Heure', trajet.heureFormatee),
-                _buildRow('Durée estimée', trajet.dureeEstimee),
-                _buildRow('Véhicule', trajet.vehiculeImmatriculation),
-                _buildRow('Statut', trajet.statut),
+                _buildRow(
+                  context,
+                  tr(fr: 'Départ', en: 'Departure', es: 'Salida', ar: 'الانطلاق'),
+                  trajet.villeDepart,
+                ),
+                _buildRow(
+                  context,
+                  tr(fr: 'Destination', en: 'Destination', es: 'Destino', ar: 'الوجهة'),
+                  trajet.villeArrivee,
+                ),
+                _buildRow(
+                  context,
+                  tr(fr: 'Date', en: 'Date', es: 'Fecha', ar: 'التاريخ'),
+                  trajet.dateDepart,
+                ),
+                _buildRow(
+                  context,
+                  tr(fr: 'Heure', en: 'Time', es: 'Hora', ar: 'الوقت'),
+                  trajet.heureFormatee,
+                ),
+                _buildRow(
+                  context,
+                  tr(
+                    fr: 'Durée estimée',
+                    en: 'Estimated duration',
+                    es: 'Duración estimada',
+                    ar: 'المدة التقديرية',
+                  ),
+                  trajet.dureeEstimee,
+                ),
+                _buildRow(
+                  context,
+                  tr(fr: 'Véhicule', en: 'Vehicle', es: 'Vehículo', ar: 'المركبة'),
+                  trajet.vehiculeImmatriculation,
+                ),
+                _buildRow(
+                  context,
+                  tr(fr: 'Statut', en: 'Status', es: 'Estado', ar: 'الحالة'),
+                  trajet.statut,
+                ),
               ],
             ),
           ),
@@ -462,47 +733,67 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.cardColor,
               borderRadius: BorderRadius.circular(24),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Tarification',
+                Text(
+                  tr(
+                    fr: 'Tarification',
+                    en: 'Pricing',
+                    es: 'Tarificación',
+                    ar: 'التسعير',
+                  ),
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151),
+                    color: titleColor,
                   ),
                 ),
                 const SizedBox(height: 18),
-                _buildRow('Prix unitaire', trajet.prixFormate),
+                _buildRow(
+                  context,
+                  tr(
+                    fr: 'Prix unitaire',
+                    en: 'Unit price',
+                    es: 'Precio unitario',
+                    ar: 'سعر الوحدة',
+                  ),
+                  trajet.prixFormate,
+                ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    const Text(
-                      'Nombre de sièges',
+                    Text(
+                      tr(
+                        fr: 'Nombre de sièges',
+                        en: 'Number of seats',
+                        es: 'Número de asientos',
+                        ar: 'عدد المقاعد',
+                      ),
                       style: TextStyle(
                         fontSize: 16,
-                        color: Color(0xFF6B7280),
+                        color: mutedColor,
                       ),
                     ),
                     const Spacer(),
                     IconButton(
-                      onPressed: nombreSieges > 1 ? _decrementSeats : null,
+                      onPressed:
+                          !isTripFull && nombreSieges > 1 ? _decrementSeats : null,
                       icon: const Icon(Icons.remove_circle_outline),
                     ),
                     Text(
                       '$nombreSieges',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF374151),
+                        color: titleColor,
                       ),
                     ),
                     IconButton(
-                      onPressed: nombreSieges < availableSeatsCount
+                      onPressed: !isTripFull && nombreSieges < availableSeatsCount
                           ? _incrementSeats
                           : null,
                       icon: const Icon(Icons.add_circle_outline),
@@ -511,15 +802,26 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Maximum disponible pour ce trajet : $availableSeatsCount siège(s)',
-                  style: const TextStyle(
+                  tr(
+                    fr: 'Maximum disponible pour ce trajet : $availableSeatsCount siège(s)',
+                    en: 'Maximum available for this trip: $availableSeatsCount seat(s)',
+                    es: 'Máximo disponible para este trayecto: $availableSeatsCount asiento(s)',
+                    ar: 'الحد الأقصى المتاح لهذه الرحلة: $availableSeatsCount مقعدًا',
+                  ),
+                  style: TextStyle(
                     fontSize: 13,
-                    color: Color(0xFF6B7280),
+                    color: mutedColor,
                   ),
                 ),
                 const SizedBox(height: 8),
                 _buildRow(
-                  'Montant total',
+                  context,
+                  tr(
+                    fr: 'Montant total',
+                    en: 'Total amount',
+                    es: 'Monto total',
+                    ar: 'المبلغ الإجمالي',
+                  ),
                   '${total.toStringAsFixed(0)} FCFA',
                   highlight: true,
                 ),
@@ -527,13 +829,27 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildSeatSelectionSection(),
+          _buildSeatSelectionSection(context),
           const SizedBox(height: 22),
           SizedBox(
             height: 56,
             child: ElevatedButton(
-              onPressed: _continuer,
-              child: const Text('Continuer'),
+              onPressed: isTripFull ? null : _continuer,
+              child: Text(
+                isTripFull
+                    ? tr(
+                        fr: 'Trajet complet',
+                        en: 'Trip full',
+                        es: 'Trayecto completo',
+                        ar: 'الرحلة ممتلئة',
+                      )
+                    : tr(
+                        fr: 'Continuer',
+                        en: 'Continue',
+                        es: 'Continuar',
+                        ar: 'متابعة',
+                      ),
+              ),
             ),
           ),
         ],

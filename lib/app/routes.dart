@@ -20,8 +20,10 @@ import 'package:transia_mobile/features/client/screens/trip_list_screen.dart';
 class AppRoutes {
   static const String login = '/login';
   static const String client = '/client';
+
   static const String chauffeurLogin = '/chauffeur-login';
   static const String chauffeur = '/chauffeur';
+  static const String chauffeurPassengers = '/chauffeur/passagers';
 
   static const String tripList = '/trip-list';
   static const String tripDetail = '/trip-detail';
@@ -35,12 +37,8 @@ class AppRoutes {
 
   static const String trackingDetail = '/tracking-detail';
   static const String rating = '/rating';
-
-  static const String chauffeurPassengers = '/chauffeur/passagers';
 }
 
-/// true = client
-/// false = chauffeur
 const bool launchClientOnly = true;
 
 final GoRouter appRouter = GoRouter(
@@ -62,6 +60,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.chauffeur,
       builder: (context, state) => const ChauffeurMainScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.chauffeurPassengers,
+      builder: (context, state) => ChauffeurTripPassengersScreen(
+        trip: state.extra as ChauffeurTripModel,
+      ),
     ),
     GoRoute(
       path: AppRoutes.tripList,
@@ -134,12 +138,6 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.rating,
       builder: (context, state) => RatingScreen(
         reservation: state.extra as ReservationModel,
-      ),
-    ),
-    GoRoute(
-      path: AppRoutes.chauffeurPassengers,
-      builder: (context, state) => ChauffeurTripPassengersScreen(
-        trip: state.extra as ChauffeurTripModel,
       ),
     ),
   ],

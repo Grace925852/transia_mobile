@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
+import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/client/models/reservation_model.dart';
 import 'package:transia_mobile/features/client/services/payment_status_service.dart';
@@ -26,7 +27,18 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
   List<ReservationModel> reservations = [];
   List<String> locallyPaidIds = [];
 
-  int selectedTab = 0; // 0 = non payées à venir, 1 = payées à venir
+  int selectedTab = 0;
+
+  AppPreferencesController get prefs => AppPreferencesController.instance;
+
+  String tr({
+    required String fr,
+    required String en,
+    required String es,
+    required String ar,
+  }) {
+    return prefs.tr(fr: fr, en: en, es: es, ar: ar);
+  }
 
   @override
   void initState() {
@@ -107,8 +119,12 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final titleColor =
+        theme.textTheme.titleLarge?.color ?? const Color(0xFF374151);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FF),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: chargerReservations,
@@ -116,12 +132,17 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 110),
             children: [
-              const Text(
-                'Mes Réservations',
+              Text(
+                tr(
+                  fr: 'Mes Réservations',
+                  en: 'My bookings',
+                  es: 'Mis reservas',
+                  ar: 'حجوزاتي',
+                ),
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF374151),
+                  color: titleColor,
                 ),
               ),
               const SizedBox(height: 16),
@@ -129,6 +150,18 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                 unpaidCount: unpaidReservations.length,
                 paidCount: paidReservations.length,
                 selectedTab: selectedTab,
+                unpaidLabel: tr(
+                  fr: 'En attente',
+                  en: 'Pending',
+                  es: 'Pendientes',
+                  ar: 'قيد الانتظار',
+                ),
+                paidLabel: tr(
+                  fr: 'Payées',
+                  en: 'Paid',
+                  es: 'Pagadas',
+                  ar: 'مدفوعة',
+                ),
                 onChanged: (index) {
                   setState(() {
                     selectedTab = index;
@@ -145,12 +178,36 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                 )
               else if (errorMessage.isNotEmpty)
                 _ErrorCard(
+                  title: tr(
+                    fr: 'Impossible de charger les réservations',
+                    en: 'Unable to load bookings',
+                    es: 'No se pueden cargar las reservas',
+                    ar: 'تعذر تحميل الحجوزات',
+                  ),
+                  retryLabel: tr(
+                    fr: 'Réessayer',
+                    en: 'Retry',
+                    es: 'Reintentar',
+                    ar: 'إعادة المحاولة',
+                  ),
                   message: errorMessage,
                   onRetry: chargerReservations,
                 )
               else if (displayedReservations.isEmpty)
                 _EmptyReservationCard(
                   isPaidTab: selectedTab == 1,
+                  emptyPendingLabel: tr(
+                    fr: 'Aucune réservation en attente à venir',
+                    en: 'No upcoming pending booking',
+                    es: 'No hay reservas pendientes próximas',
+                    ar: 'لا توجد حجوزات معلقة قادمة',
+                  ),
+                  emptyPaidLabel: tr(
+                    fr: 'Aucune réservation payée à venir',
+                    en: 'No upcoming paid booking',
+                    es: 'No hay reservas pagadas próximas',
+                    ar: 'لا توجد حجوزات مدفوعة قادمة',
+                  ),
                 )
               else
                 ...displayedReservations.map(
@@ -159,6 +216,66 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                     child: _ReservationCard(
                       reservation: reservation,
                       isPaid: _isPaid(reservation),
+                      payLabel: tr(
+                        fr: 'Payer',
+                        en: 'Pay',
+                        es: 'Pagar',
+                        ar: 'ادفع',
+                      ),
+                      ticketLabel: tr(
+                        fr: 'Voir billet',
+                        en: 'View ticket',
+                        es: 'Ver boleto',
+                        ar: 'عرض التذكرة',
+                      ),
+                      dateLabel: tr(
+                        fr: 'Date',
+                        en: 'Date',
+                        es: 'Fecha',
+                        ar: 'التاريخ',
+                      ),
+                      timeLabel: tr(
+                        fr: 'Heure',
+                        en: 'Time',
+                        es: 'Hora',
+                        ar: 'الوقت',
+                      ),
+                      vehicleLabel: tr(
+                        fr: 'Véhicule',
+                        en: 'Vehicle',
+                        es: 'Vehículo',
+                        ar: 'المركبة',
+                      ),
+                      responsibleLabel: tr(
+                        fr: 'Responsable',
+                        en: 'Responsible',
+                        es: 'Responsable',
+                        ar: 'المسؤول',
+                      ),
+                      passengersLabel: tr(
+                        fr: 'Passagers',
+                        en: 'Passengers',
+                        es: 'Pasajeros',
+                        ar: 'المسافرون',
+                      ),
+                      statusLabel: tr(
+                        fr: 'Statut',
+                        en: 'Status',
+                        es: 'Estado',
+                        ar: 'الحالة',
+                      ),
+                      waitingText: tr(
+                        fr: 'EN ATTENTE',
+                        en: 'PENDING',
+                        es: 'PENDIENTE',
+                        ar: 'قيد الانتظار',
+                      ),
+                      paidText: tr(
+                        fr: 'PAYÉE',
+                        en: 'PAID',
+                        es: 'PAGADA',
+                        ar: 'مدفوعة',
+                      ),
                       onPay: () async {
                         await context.push(
                           AppRoutes.payment,
@@ -188,12 +305,16 @@ class _ReservationTabs extends StatelessWidget {
   final int unpaidCount;
   final int paidCount;
   final int selectedTab;
+  final String unpaidLabel;
+  final String paidLabel;
   final ValueChanged<int> onChanged;
 
   const _ReservationTabs({
     required this.unpaidCount,
     required this.paidCount,
     required this.selectedTab,
+    required this.unpaidLabel,
+    required this.paidLabel,
     required this.onChanged,
   });
 
@@ -203,7 +324,7 @@ class _ReservationTabs extends StatelessWidget {
       children: [
         Expanded(
           child: _SmallTab(
-            title: 'En attente',
+            title: unpaidLabel,
             count: unpaidCount,
             selected: selectedTab == 0,
             color: const Color(0xFFF59E0B),
@@ -213,7 +334,7 @@ class _ReservationTabs extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           child: _SmallTab(
-            title: 'Payées',
+            title: paidLabel,
             count: paidCount,
             selected: selectedTab == 1,
             color: const Color(0xFF16A34A),
@@ -242,8 +363,15 @@ class _SmallTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor =
+        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
+
     return Material(
-      color: selected ? Colors.white : Colors.white.withOpacity(0.75),
+      color: selected
+          ? theme.cardColor
+          : (isDark ? const Color(0xFF111827) : Colors.white.withOpacity(0.75)),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -281,7 +409,7 @@ class _SmallTab extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: const Color(0xFF374151),
+                    color: textColor,
                   ),
                 ),
               ),
@@ -296,23 +424,47 @@ class _SmallTab extends StatelessWidget {
 class _ReservationCard extends StatelessWidget {
   final ReservationModel reservation;
   final bool isPaid;
+  final String payLabel;
+  final String ticketLabel;
+  final String dateLabel;
+  final String timeLabel;
+  final String vehicleLabel;
+  final String responsibleLabel;
+  final String passengersLabel;
+  final String statusLabel;
+  final String waitingText;
+  final String paidText;
   final VoidCallback onPay;
   final VoidCallback onViewTicket;
 
   const _ReservationCard({
     required this.reservation,
     required this.isPaid,
+    required this.payLabel,
+    required this.ticketLabel,
+    required this.dateLabel,
+    required this.timeLabel,
+    required this.vehicleLabel,
+    required this.responsibleLabel,
+    required this.passengersLabel,
+    required this.statusLabel,
+    required this.waitingText,
+    required this.paidText,
     required this.onPay,
     required this.onViewTicket,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final titleColor =
+        theme.textTheme.titleLarge?.color ?? const Color(0xFF374151);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
@@ -320,24 +472,24 @@ class _ReservationCard extends StatelessWidget {
         children: [
           Text(
             reservation.trajetLabel,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF374151),
+              color: titleColor,
             ),
           ),
           const SizedBox(height: 14),
-          _ReservationRow(label: 'Date', value: reservation.dateDepart),
-          _ReservationRow(label: 'Heure', value: reservation.heureFormatee),
-          _ReservationRow(label: 'Véhicule', value: reservation.vehiculeImmatriculation),
-          _ReservationRow(label: 'Responsable', value: reservation.clientNom),
+          _ReservationRow(label: dateLabel, value: reservation.dateDepart),
+          _ReservationRow(label: timeLabel, value: reservation.heureFormatee),
+          _ReservationRow(label: vehicleLabel, value: reservation.vehiculeImmatriculation),
+          _ReservationRow(label: responsibleLabel, value: reservation.clientNom),
           _ReservationRow(
-            label: 'Passagers',
+            label: passengersLabel,
             value: '${reservation.nombrePlace}',
           ),
           _ReservationRow(
-            label: 'Statut',
-            value: isPaid ? 'PAYÉE' : 'EN ATTENTE',
+            label: statusLabel,
+            value: isPaid ? paidText : waitingText,
             valueColor:
                 isPaid ? const Color(0xFF16A34A) : const Color(0xFFF59E0B),
           ),
@@ -375,7 +527,7 @@ class _ReservationCard extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      isPaid ? 'Voir billet' : 'Payer',
+                      isPaid ? ticketLabel : payLabel,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -402,7 +554,12 @@ class _ReservationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final safeValue = value.trim().isEmpty ? '-' : value;
+    final mutedColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
+    final normalTextColor =
+        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -411,9 +568,9 @@ class _ReservationRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
-                color: Color(0xFF6B7280),
+                color: mutedColor,
               ),
             ),
           ),
@@ -424,7 +581,7 @@ class _ReservationRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: valueColor ?? const Color(0xFF374151),
+                color: valueColor ?? normalTextColor,
               ),
             ),
           ),
@@ -436,17 +593,25 @@ class _ReservationRow extends StatelessWidget {
 
 class _EmptyReservationCard extends StatelessWidget {
   final bool isPaidTab;
+  final String emptyPendingLabel;
+  final String emptyPaidLabel;
 
   const _EmptyReservationCard({
     required this.isPaidTab,
+    required this.emptyPendingLabel,
+    required this.emptyPaidLabel,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final titleColor =
+        theme.textTheme.titleLarge?.color ?? const Color(0xFF374151);
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
@@ -456,18 +621,17 @@ class _EmptyReservationCard extends StatelessWidget {
                 ? Icons.check_circle_outline_rounded
                 : Icons.calendar_month_outlined,
             size: 52,
-            color: const Color(0xFF9CA3AF),
+            color: theme.textTheme.bodyMedium?.color,
           ),
           const SizedBox(height: 12),
           Text(
-            isPaidTab
-                ? 'Aucune réservation payée à venir'
-                : 'Aucune réservation en attente à venir',
-            style: const TextStyle(
+            isPaidTab ? emptyPaidLabel : emptyPendingLabel,
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF374151),
+              color: titleColor,
             ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -476,20 +640,28 @@ class _EmptyReservationCard extends StatelessWidget {
 }
 
 class _ErrorCard extends StatelessWidget {
+  final String title;
   final String message;
+  final String retryLabel;
   final Future<void> Function() onRetry;
 
   const _ErrorCard({
+    required this.title,
     required this.message,
+    required this.retryLabel,
     required this.onRetry,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final titleColor =
+        theme.textTheme.titleLarge?.color ?? const Color(0xFF374151);
+
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
@@ -500,29 +672,29 @@ class _ErrorCard extends StatelessWidget {
             color: Colors.redAccent,
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Impossible de charger les réservations',
+          Text(
+            title,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF374151),
+              color: titleColor,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
-              color: Color(0xFF6B7280),
+              color: theme.textTheme.bodyMedium?.color,
             ),
           ),
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Réessayer'),
+            label: Text(retryLabel),
           ),
         ],
       ),

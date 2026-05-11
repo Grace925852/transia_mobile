@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
+import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 import 'package:transia_mobile/features/client/models/reservation_model.dart';
 import 'package:transia_mobile/features/client/services/payment_status_service.dart';
 
@@ -22,6 +23,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   String paymentMethod = 'Flooz';
   bool isProcessing = false;
+
+  AppPreferencesController get prefs => AppPreferencesController.instance;
+
+  String tr({
+    required String fr,
+    required String en,
+    required String es,
+    required String ar,
+  }) {
+    return prefs.tr(fr: fr, en: en, es: es, ar: ar);
+  }
 
   String _safe(String? value, {String fallback = '-'}) {
     final v = value?.trim() ?? '';
@@ -47,19 +59,16 @@ class _PaymentScreenState extends State<PaymentScreen> {
     return [];
   }
 
-  List<int> _extractSeatNumbers() {
+  List<String> _extractSeatNumbers() {
     final raw = widget.reservation.rawData;
     final billets = _extractBillets();
-    final Set<int> seats = {};
+    final Set<String> seats = {};
 
     void addSeat(dynamic value) {
-      if (value is int) {
-        seats.add(value);
-      } else if (value is String) {
-        final parsed = int.tryParse(value.trim());
-        if (parsed != null) {
-          seats.add(parsed);
-        }
+      if (value == null) return;
+      final text = value.toString().trim();
+      if (text.isNotEmpty && text.toLowerCase() != 'null') {
+        seats.add(text);
       }
     }
 
@@ -71,9 +80,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
 
     final extraLists = [
-      raw['numerosSieges'],
+      raw['siegesChoisis'],
       raw['selectedSeats'],
       raw['seatNumbers'],
+      raw['numerosSieges'],
     ];
 
     for (final data in extraLists) {
@@ -84,7 +94,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
       }
     }
 
-    return seats.toList()..sort();
+    final result = seats.toList();
+    result.sort((a, b) {
+      final na = int.tryParse(a);
+      final nb = int.tryParse(b);
+      if (na != null && nb != null) return na.compareTo(nb);
+      return a.compareTo(b);
+    });
+    return result;
   }
 
   Future<void> effectuerPaiement() async {
@@ -93,7 +110,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
     });
 
     await Future.delayed(const Duration(seconds: 2));
-
     await paymentStatusService.markReservationAsPaid(widget.reservation.id);
 
     if (!mounted) return;
@@ -105,7 +121,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'Paiement effectué avec succès par $paymentMethod.',
+          tr(
+            fr: 'Paiement effectué avec succès par $paymentMethod.',
+            en: 'Payment completed successfully with $paymentMethod.',
+            es: 'Pago realizado correctamente con $paymentMethod.',
+            ar: 'تم الدفع بنجاح عبر $paymentMethod.',
+          ),
         ),
       ),
     );
@@ -113,7 +134,18 @@ class _PaymentScreenState extends State<PaymentScreen> {
     context.go(AppRoutes.reservations);
   }
 
-  Widget _buildInfoRow(String label, String value, {bool highlight = false}) {
+  Widget _buildInfoRow(
+    BuildContext context,
+    String label,
+    String value, {
+    bool highlight = false,
+  }) {
+    final theme = Theme.of(context);
+    final normalTextColor =
+        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
+    final mutedColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
@@ -121,9 +153,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
-                color: Color(0xFF6B7280),
+                color: mutedColor,
               ),
             ),
           ),
@@ -134,9 +166,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: highlight
-                    ? const Color(0xFF3158F5)
-                    : const Color(0xFF374151),
+                color: highlight ? primaryBlue : normalTextColor,
               ),
             ),
           ),
@@ -145,8 +175,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
     );
   }
 
-  Widget _buildPaymentMethodTile(String method, IconData icon) {
+  Widget _buildPaymentMethodTile(BuildContext context, String method, IconData icon) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final isSelected = paymentMethod == method;
+    final normalTextColor =
+        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
+    final mutedColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
 
     return GestureDetector(
       onTap: () {
@@ -157,10 +193,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFEFF3FF) : Colors.white,
+          color: isSelected
+              ? (isDark ? const Color(0xFF172554) : const Color(0xFFEFF3FF))
+              : theme.cardColor,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isSelected ? primaryBlue : const Color(0xFFE5E7EB),
+            color: isSelected
+                ? primaryBlue
+                : (isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB)),
             width: 1.4,
           ),
         ),
@@ -168,7 +208,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           children: [
             Icon(
               icon,
-              color: isSelected ? primaryBlue : const Color(0xFF6B7280),
+              color: isSelected ? primaryBlue : mutedColor,
               size: 24,
             ),
             const SizedBox(width: 12),
@@ -178,7 +218,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: isSelected ? primaryBlue : const Color(0xFF374151),
+                  color: isSelected ? primaryBlue : normalTextColor,
                 ),
               ),
             ),
@@ -186,7 +226,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               isSelected
                   ? Icons.radio_button_checked
                   : Icons.radio_button_off,
-              color: isSelected ? primaryBlue : const Color(0xFF9CA3AF),
+              color: isSelected ? primaryBlue : mutedColor,
             ),
           ],
         ),
@@ -196,23 +236,23 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final montant = widget.reservation.prixFormate;
     final seatNumbers = _extractSeatNumbers();
+    final titleColor =
+        theme.textTheme.titleLarge?.color ?? const Color(0xFF374151);
+    final mutedColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FF),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: Color(0xFF374151)),
-        title: const Text(
-          'Paiement',
-          style: TextStyle(
-            color: Color(0xFF374151),
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
+        title: Text(
+          tr(
+            fr: 'Paiement',
+            en: 'Payment',
+            es: 'Pago',
+            ar: 'الدفع',
           ),
         ),
       ),
@@ -222,38 +262,92 @@ class _PaymentScreenState extends State<PaymentScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.cardColor,
               borderRadius: BorderRadius.circular(24),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Résumé du paiement',
+                Text(
+                  tr(
+                    fr: 'Résumé du paiement',
+                    en: 'Payment summary',
+                    es: 'Resumen del pago',
+                    ar: 'ملخص الدفع',
+                  ),
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151),
+                    color: titleColor,
                   ),
                 ),
                 const SizedBox(height: 18),
-                _buildInfoRow('Trajet', widget.reservation.trajetLabel),
-                _buildInfoRow('Date', widget.reservation.dateDepart),
-                _buildInfoRow('Heure', widget.reservation.heureFormatee),
                 _buildInfoRow(
-                  'Responsable',
+                  context,
+                  tr(fr: 'Trajet', en: 'Trip', es: 'Trayecto', ar: 'الرحلة'),
+                  widget.reservation.trajetLabel,
+                ),
+                _buildInfoRow(
+                  context,
+                  tr(fr: 'Date', en: 'Date', es: 'Fecha', ar: 'التاريخ'),
+                  widget.reservation.dateDepart,
+                ),
+                _buildInfoRow(
+                  context,
+                  tr(fr: 'Heure', en: 'Time', es: 'Hora', ar: 'الوقت'),
+                  widget.reservation.heureFormatee,
+                ),
+                _buildInfoRow(
+                  context,
+                  tr(
+                    fr: 'Responsable',
+                    en: 'Responsible',
+                    es: 'Responsable',
+                    ar: 'المسؤول',
+                  ),
                   _safe(widget.reservation.clientNom),
                 ),
                 _buildInfoRow(
-                  'Passagers',
+                  context,
+                  tr(
+                    fr: 'Passagers',
+                    en: 'Passengers',
+                    es: 'Pasajeros',
+                    ar: 'المسافرون',
+                  ),
                   '${widget.reservation.nombrePlace}',
                 ),
                 _buildInfoRow(
-                  'Sièges choisis',
+                  context,
+                  tr(
+                    fr: 'Sièges choisis',
+                    en: 'Selected seats',
+                    es: 'Asientos elegidos',
+                    ar: 'المقاعد المختارة',
+                  ),
                   seatNumbers.isEmpty ? '-' : seatNumbers.join(', '),
                 ),
-                _buildInfoRow('Prix unitaire', montant),
-                _buildInfoRow('Montant à payer', montant, highlight: true),
+                _buildInfoRow(
+                  context,
+                  tr(
+                    fr: 'Prix unitaire',
+                    en: 'Unit price',
+                    es: 'Precio unitario',
+                    ar: 'سعر الوحدة',
+                  ),
+                  montant,
+                ),
+                _buildInfoRow(
+                  context,
+                  tr(
+                    fr: 'Montant à payer',
+                    en: 'Amount to pay',
+                    es: 'Monto a pagar',
+                    ar: 'المبلغ المستحق',
+                  ),
+                  montant,
+                  highlight: true,
+                ),
               ],
             ),
           ),
@@ -261,24 +355,30 @@ class _PaymentScreenState extends State<PaymentScreen> {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.cardColor,
               borderRadius: BorderRadius.circular(24),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Mode de paiement',
+                Text(
+                  tr(
+                    fr: 'Mode de paiement',
+                    en: 'Payment method',
+                    es: 'Método de pago',
+                    ar: 'طريقة الدفع',
+                  ),
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151),
+                    color: titleColor,
                   ),
                 ),
                 const SizedBox(height: 18),
-                _buildPaymentMethodTile('Flooz', Icons.phone_android_rounded),
+                _buildPaymentMethodTile(context, 'Flooz', Icons.phone_android_rounded),
                 const SizedBox(height: 12),
                 _buildPaymentMethodTile(
+                  context,
                   'TMoney',
                   Icons.account_balance_wallet_rounded,
                 ),
@@ -289,14 +389,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.cardColor,
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Text(
-              'Le paiement se fait en totalité. Aucun paiement par tranche n’est autorisé.',
+            child: Text(
+              tr(
+                fr: 'Le paiement se fait en totalité. Aucun paiement par tranche n’est autorisé.',
+                en: 'Payment must be made in full. Partial payment is not allowed.',
+                es: 'El pago debe hacerse en su totalidad. No se permite el pago parcial.',
+                ar: 'يجب أن يتم الدفع بالكامل. لا يُسمح بالدفع الجزئي.',
+              ),
               style: TextStyle(
                 fontSize: 14,
-                color: Color(0xFF6B7280),
+                color: mutedColor,
                 height: 1.5,
               ),
             ),
@@ -306,14 +411,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
             height: 56,
             child: ElevatedButton(
               onPressed: isProcessing ? null : effectuerPaiement,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryBlue,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-              ),
               child: isProcessing
                   ? const SizedBox(
                       width: 22,
@@ -323,9 +420,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
                         strokeWidth: 2.4,
                       ),
                     )
-                  : const Text(
-                      'Confirmer le paiement',
-                      style: TextStyle(
+                  : Text(
+                      tr(
+                        fr: 'Confirmer le paiement',
+                        en: 'Confirm payment',
+                        es: 'Confirmar pago',
+                        ar: 'تأكيد الدفع',
+                      ),
+                      style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
                       ),

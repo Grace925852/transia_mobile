@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
+import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/client/models/trajet_model.dart';
 import 'package:transia_mobile/features/client/models/ville_model.dart';
@@ -21,10 +22,6 @@ class ClientHomeScreen extends StatefulWidget {
 }
 
 class _ClientHomeScreenState extends State<ClientHomeScreen> {
-  final Color primaryBlue = const Color(0xFF3158F5);
-  final Color backgroundColor = const Color(0xFFF5F7FF);
-  final Color textColor = const Color(0xFF374151);
-
   String? villeDepart;
   String? villeArrivee;
   DateTime? selectedDate;
@@ -43,6 +40,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
   String clientNomConnecte = 'Client';
 
+  AppPreferencesController get prefs => AppPreferencesController.instance;
+
   @override
   void initState() {
     super.initState();
@@ -56,6 +55,15 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     chargerDonnees();
   }
 
+  String tr({
+    required String fr,
+    required String en,
+    required String es,
+    required String ar,
+  }) {
+    return prefs.tr(fr: fr, en: en, es: es, ar: ar);
+  }
+
   Future<void> chargerNomClient() async {
     final nom = await secureStorageService.getFullName();
 
@@ -63,7 +71,14 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
     setState(() {
       clientNomConnecte =
-          (nom != null && nom.trim().isNotEmpty) ? nom : 'Client';
+          (nom != null && nom.trim().isNotEmpty)
+              ? nom
+              : tr(
+                  fr: 'Client',
+                  en: 'Client',
+                  es: 'Cliente',
+                  ar: 'العميل',
+                );
     });
   }
 
@@ -80,7 +95,14 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   }
 
   String get dateText {
-    if (selectedDate == null) return 'jj/mm/aaaa';
+    if (selectedDate == null) {
+      return tr(
+        fr: 'jj/mm/aaaa',
+        en: 'dd/mm/yyyy',
+        es: 'dd/mm/aaaa',
+        ar: 'يوم/شهر/سنة',
+      );
+    }
 
     final day = selectedDate!.day.toString().padLeft(2, '0');
     final month = selectedDate!.month.toString().padLeft(2, '0');
@@ -129,9 +151,10 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
     final result = await showDatePicker(
       context: context,
-      initialDate: selectedDate != null && !selectedDate!.isBefore(today)
-          ? selectedDate!
-          : today,
+      initialDate:
+          selectedDate != null && !selectedDate!.isBefore(today)
+              ? selectedDate!
+              : today,
       firstDate: today,
       lastDate: DateTime(today.year + 2),
     );
@@ -147,9 +170,10 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   DateTime? _parseTrajetDateTime(TrajetModel trajet) {
     try {
       final rawDate = trajet.dateDepart.trim();
-      final rawTime = trajet.heureFormatee.trim().isEmpty
-          ? '00:00'
-          : trajet.heureFormatee.trim();
+      final rawTime =
+          trajet.heureFormatee.trim().isEmpty
+              ? '00:00'
+              : trajet.heureFormatee.trim();
 
       int year;
       int month;
@@ -212,19 +236,21 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
     try {
       final filtered = trajets.where((trajet) {
-        final matchDepart = depart.isEmpty
-            ? true
-            : trajet.villeDepart.trim().toLowerCase().contains(depart);
+        final matchDepart =
+            depart.isEmpty
+                ? true
+                : trajet.villeDepart.trim().toLowerCase().contains(depart);
 
-        final matchArrivee = arrivee.isEmpty
-            ? true
-            : trajet.villeArrivee.trim().toLowerCase().contains(arrivee);
+        final matchArrivee =
+            arrivee.isEmpty
+                ? true
+                : trajet.villeArrivee.trim().toLowerCase().contains(arrivee);
 
-        final matchDate = selectedDate == null
-            ? true
-            : _sameDate(trajet.dateDepart, selectedDate!);
+        final matchDate =
+            selectedDate == null ? true : _sameDate(trajet.dateDepart, selectedDate!);
 
-        final differentCities = trajet.villeDepart.trim().toLowerCase() !=
+        final differentCities =
+            trajet.villeDepart.trim().toLowerCase() !=
             trajet.villeArrivee.trim().toLowerCase();
 
         final upcoming = _isUpcomingTrajet(trajet);
@@ -258,10 +284,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     final month = selected.month.toString().padLeft(2, '0');
     final year = selected.year.toString();
 
-    final formats = [
-      '$day/$month/$year',
-      '$year-$month-$day',
-    ];
+    final formats = ['$day/$month/$year', '$year-$month-$day'];
 
     return formats.contains(rawDate.trim());
   }
@@ -274,7 +297,14 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       trajetsAffiches = trajets.where(_isUpcomingTrajet).toList();
     });
 
-    afficherMessage('Filtres réinitialisés.');
+    afficherMessage(
+      tr(
+        fr: 'Filtres réinitialisés.',
+        en: 'Filters reset.',
+        es: 'Filtros reiniciados.',
+        ar: 'تمت إعادة تعيين الفلاتر.',
+      ),
+    );
   }
 
   Future<void> _setVilleDepart(String value) async {
@@ -291,7 +321,12 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     if (villeArrivee != null &&
         villeArrivee!.trim().toLowerCase() == cleaned.toLowerCase()) {
       afficherMessage(
-        "La ville de départ doit être différente de la ville d'arrivée.",
+        tr(
+          fr: "La ville de départ doit être différente de la ville d'arrivée.",
+          en: 'Departure city must be different from arrival city.',
+          es: 'La ciudad de salida debe ser diferente de la de llegada.',
+          ar: 'يجب أن تكون مدينة الانطلاق مختلفة عن مدينة الوصول.',
+        ),
       );
       return;
     }
@@ -317,7 +352,12 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     if (villeDepart != null &&
         villeDepart!.trim().toLowerCase() == cleaned.toLowerCase()) {
       afficherMessage(
-        "La ville d'arrivée doit être différente de la ville de départ.",
+        tr(
+          fr: "La ville d'arrivée doit être différente de la ville de départ.",
+          en: 'Arrival city must be different from departure city.',
+          es: 'La ciudad de llegada debe ser diferente de la de salida.',
+          ar: 'يجب أن تكون مدينة الوصول مختلفة عن مدينة الانطلاق.',
+        ),
       );
       return;
     }
@@ -341,38 +381,51 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final content = SafeArea(
-      bottom: false,
-      child: RefreshIndicator(
-        onRefresh: chargerDonnees,
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            _buildTopSection(),
-            const SizedBox(height: 24),
-            _buildSuggestionsSection(),
-            const SizedBox(height: 26),
-            _buildTripsSection(),
-            const SizedBox(height: 40),
-          ],
-        ),
-      ),
-    );
+    return AnimatedBuilder(
+      animation: prefs,
+      builder: (context, _) {
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+        final primaryBlue = const Color(0xFF3158F5);
+        final backgroundColor = theme.scaffoldBackgroundColor;
+        final textColor =
+            theme.textTheme.bodyLarge?.color ??
+            (isDark ? Colors.white : const Color(0xFF374151));
 
-    if (!widget.showScaffold) {
-      return Container(
-        color: backgroundColor,
-        child: content,
-      );
-    }
+        final content = SafeArea(
+          bottom: false,
+          child: RefreshIndicator(
+            onRefresh: chargerDonnees,
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _buildTopSection(primaryBlue, textColor, isDark),
+                const SizedBox(height: 24),
+                _buildSuggestionsSection(primaryBlue, textColor, isDark),
+                const SizedBox(height: 26),
+                _buildTripsSection(primaryBlue, textColor, isDark),
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
+        );
 
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      body: content,
+        if (!widget.showScaffold) {
+          return Container(
+            color: backgroundColor,
+            child: content,
+          );
+        }
+
+        return Scaffold(
+          backgroundColor: backgroundColor,
+          body: content,
+        );
+      },
     );
   }
 
-  Widget _buildTopSection() {
+  Widget _buildTopSection(Color primaryBlue, Color textColor, bool isDark) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -382,10 +435,15 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [
-                primaryBlue,
-                const Color(0xFF1F3EDB),
-              ],
+              colors: isDark
+                  ? const [
+                      Color(0xFF0F172A),
+                      Color(0xFF081225),
+                    ]
+                  : [
+                      primaryBlue,
+                      const Color(0xFF1F3EDB),
+                    ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -430,22 +488,24 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 100, 18, 0),
-          child: _buildSearchCard(),
+          child: _buildSearchCard(primaryBlue, textColor, isDark),
         ),
       ],
     );
   }
 
-  Widget _buildSearchCard() {
+  Widget _buildSearchCard(Color primaryBlue, Color textColor, bool isDark) {
+    final cardColor = Theme.of(context).cardColor;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withOpacity(isDark ? 0.22 : 0.08),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -454,13 +514,34 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _title('Rechercher un trajet'),
+          _title(
+            tr(
+              fr: 'Rechercher un trajet',
+              en: 'Search for a trip',
+              es: 'Buscar un trayecto',
+              ar: 'البحث عن رحلة',
+            ),
+            textColor,
+          ),
           const SizedBox(height: 16),
-          _label('Ville de départ'),
+          _label(
+            tr(
+              fr: 'Ville de départ',
+              en: 'Departure city',
+              es: 'Ciudad de salida',
+              ar: 'مدينة الانطلاق',
+            ),
+            textColor,
+          ),
           const SizedBox(height: 6),
           _SearchableCityField(
             icon: Icons.location_on_outlined,
-            hintText: 'Sélectionnez une ville',
+            hintText: tr(
+              fr: 'Sélectionnez une ville',
+              en: 'Select a city',
+              es: 'Seleccione una ciudad',
+              ar: 'اختر مدينة',
+            ),
             initialValue: villeDepart,
             excludedValue: villeArrivee,
             cities: nomsVilles,
@@ -469,11 +550,24 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             },
           ),
           const SizedBox(height: 14),
-          _label("Ville d'arrivée"),
+          _label(
+            tr(
+              fr: "Ville d'arrivée",
+              en: 'Arrival city',
+              es: 'Ciudad de llegada',
+              ar: 'مدينة الوصول',
+            ),
+            textColor,
+          ),
           const SizedBox(height: 6),
           _SearchableCityField(
             icon: Icons.near_me_outlined,
-            hintText: 'Sélectionnez une ville',
+            hintText: tr(
+              fr: 'Sélectionnez une ville',
+              en: 'Select a city',
+              es: 'Seleccione una ciudad',
+              ar: 'اختر مدينة',
+            ),
             initialValue: villeArrivee,
             excludedValue: villeDepart,
             cities: nomsVilles,
@@ -482,7 +576,15 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             },
           ),
           const SizedBox(height: 14),
-          _label('Date de départ'),
+          _label(
+            tr(
+              fr: 'Date de départ',
+              en: 'Departure date',
+              es: 'Fecha de salida',
+              ar: 'تاريخ الانطلاق',
+            ),
+            textColor,
+          ),
           const SizedBox(height: 6),
           GestureDetector(
             onTap: choisirDate,
@@ -497,7 +599,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     );
   }
 
-  Widget _buildSuggestionsSection() {
+  Widget _buildSuggestionsSection(
+    Color primaryBlue,
+    Color textColor,
+    bool isDark,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Column(
@@ -512,7 +618,12 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Suggestions IA',
+                tr(
+                  fr: 'Suggestions IA',
+                  en: 'AI Suggestions',
+                  es: 'Sugerencias IA',
+                  ar: 'اقتراحات الذكاء الاصطناعي',
+                ),
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w500,
@@ -522,28 +633,45 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          const _SuggestionCard(
+          _SuggestionCard(
             icon: Icons.access_time_rounded,
-            title: 'Actualisation dynamique',
-            subtitle: 'Tirez vers le bas pour recharger les trajets',
-            backgroundColor: Color(0xFFF0F4FF),
-            iconColor: Color(0xFF3158D4),
-            titleColor: Color(0xFF3158D4),
-            subtitleColor: Color(0xFF6A7FB8),
+            title: tr(
+              fr: 'Actualisation dynamique',
+              en: 'Dynamic refresh',
+              es: 'Actualización dinámica',
+              ar: 'تحديث ديناميكي',
+            ),
+            subtitle: tr(
+              fr: 'Tirez vers le bas pour recharger les trajets',
+              en: 'Pull down to refresh trips',
+              es: 'Deslice hacia abajo para recargar los trayectos',
+              ar: 'اسحب للأسفل لتحديث الرحلات',
+            ),
+            backgroundColor:
+                isDark ? const Color(0xFF0F172A) : const Color(0xFFF0F4FF),
+            iconColor: primaryBlue,
+            titleColor: primaryBlue,
+            subtitleColor:
+                isDark ? const Color(0xFFCBD5E1) : const Color(0xFF6A7FB8),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTripsSection() {
+  Widget _buildTripsSection(Color primaryBlue, Color textColor, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Trajets disponibles (${trajetsAffiches.length})',
+            '${tr(
+              fr: 'Trajets disponibles',
+              en: 'Available trips',
+              es: 'Trayectos disponibles',
+              ar: 'الرحلات المتاحة',
+            )} (${trajetsAffiches.length})',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
@@ -551,7 +679,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             ),
           ),
           const SizedBox(height: 14),
-          if (isLoadingData)
+          if (isLoadingData || isSearching)
             const Center(
               child: Padding(
                 padding: EdgeInsets.all(32),
@@ -560,6 +688,24 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             )
           else if (trajetsAffiches.isEmpty)
             _EmptyTrajetCard(
+              title: tr(
+                fr: 'Aucun trajet disponible',
+                en: 'No trip available',
+                es: 'Ningún trayecto disponible',
+                ar: 'لا توجد رحلات متاحة',
+              ),
+              subtitle: tr(
+                fr: 'Ajustez les filtres ou réinitialisez la page.',
+                en: 'Adjust filters or reset the page.',
+                es: 'Ajuste los filtros o reinicie la página.',
+                ar: 'عدّل الفلاتر أو أعد ضبط الصفحة.',
+              ),
+              resetLabel: tr(
+                fr: 'Réinitialiser',
+                en: 'Reset',
+                es: 'Restablecer',
+                ar: 'إعادة التعيين',
+              ),
               onReset: reinitialiserRecherche,
             )
           else
@@ -580,6 +726,18 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                   trajet: trajet,
                   iconColor: _getTripColor(index),
                   buttonColor: primaryBlue,
+                  reserveLabel: tr(
+                    fr: 'Réserver',
+                    en: 'Book',
+                    es: 'Reservar',
+                    ar: 'احجز',
+                  ),
+                  vehicleLabel: tr(
+                    fr: 'Véhicule',
+                    en: 'Vehicle',
+                    es: 'Vehículo',
+                    ar: 'مركبة',
+                  ),
                   onReserve: () {
                     context.push(
                       AppRoutes.tripDetail,
@@ -606,7 +764,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     return colors[index % colors.length];
   }
 
-  Widget _title(String text) {
+  Widget _title(String text, Color textColor) {
     return Text(
       text,
       style: TextStyle(
@@ -617,7 +775,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     );
   }
 
-  Widget _label(String text) {
+  Widget _label(String text, Color textColor) {
     return Text(
       text,
       style: TextStyle(
@@ -676,6 +834,16 @@ class _SearchableCityFieldState extends State<_SearchableCityField> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fillColor =
+        isDark ? const Color(0xFF111827) : const Color(0xFFF6F7FB);
+    final borderColor =
+        isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB);
+    final textColor = isDark ? Colors.white : const Color(0xFF111827);
+    final hintColor =
+        isDark ? const Color(0xFF94A3B8) : const Color(0xFF9CA3AF);
+    final popupColor = Theme.of(context).cardColor;
+
     return Autocomplete<String>(
       optionsBuilder: (TextEditingValue textEditingValue) {
         final query = textEditingValue.text.trim().toLowerCase();
@@ -713,10 +881,10 @@ class _SearchableCityFieldState extends State<_SearchableCityField> {
         return Container(
           height: 52,
           decoration: BoxDecoration(
-            color: const Color(0xFFF6F7FB),
+            color: fillColor,
             borderRadius: BorderRadius.circular(15),
             border: Border.all(
-              color: const Color(0xFFE5E7EB),
+              color: borderColor,
               width: 1,
             ),
           ),
@@ -724,25 +892,25 @@ class _SearchableCityFieldState extends State<_SearchableCityField> {
             controller: textController,
             focusNode: focusNode,
             onChanged: widget.onChanged,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
-              color: Color(0xFF111827),
+              color: textColor,
             ),
             decoration: InputDecoration(
               border: InputBorder.none,
               hintText: widget.hintText,
-              hintStyle: const TextStyle(
+              hintStyle: TextStyle(
                 fontSize: 14,
-                color: Color(0xFF9CA3AF),
+                color: hintColor,
               ),
               prefixIcon: Icon(
                 widget.icon,
-                color: const Color(0xFF9CA3AF),
+                color: hintColor,
                 size: 22,
               ),
-              suffixIcon: const Icon(
+              suffixIcon: Icon(
                 Icons.keyboard_arrow_down_rounded,
-                color: Color(0xFF9CA3AF),
+                color: hintColor,
                 size: 25,
               ),
               contentPadding: const EdgeInsets.symmetric(
@@ -763,7 +931,7 @@ class _SearchableCityFieldState extends State<_SearchableCityField> {
               width: MediaQuery.of(context).size.width - 72,
               constraints: const BoxConstraints(maxHeight: 210),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: popupColor,
                 borderRadius: BorderRadius.circular(14),
               ),
               child: ListView.builder(
@@ -776,7 +944,7 @@ class _SearchableCityFieldState extends State<_SearchableCityField> {
                     dense: true,
                     title: Text(
                       option,
-                      style: const TextStyle(fontSize: 14),
+                      style: TextStyle(fontSize: 14, color: textColor),
                     ),
                     onTap: () {
                       onSelected(option);
@@ -805,14 +973,23 @@ class _InputDisplayBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fillColor =
+        isDark ? const Color(0xFF111827) : const Color(0xFFF6F7FB);
+    final borderColor =
+        isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB);
+    final textColor = isDark ? Colors.white : const Color(0xFF111827);
+    final hintColor =
+        isDark ? const Color(0xFF94A3B8) : const Color(0xFF9CA3AF);
+
     return Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF6F7FB),
+        color: fillColor,
         borderRadius: BorderRadius.circular(15),
         border: Border.all(
-          color: const Color(0xFFE5E7EB),
+          color: borderColor,
           width: 1,
         ),
       ),
@@ -820,23 +997,23 @@ class _InputDisplayBox extends StatelessWidget {
         children: [
           Icon(
             icon,
-            color: const Color(0xFF9CA3AF),
+            color: hintColor,
             size: 22,
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
-                color: Color(0xFF111827),
+                color: textColor,
               ),
             ),
           ),
           if (trailingIcon != null)
             Icon(
               trailingIcon,
-              color: const Color(0xFF9CA3AF),
+              color: hintColor,
               size: 21,
             ),
         ],
@@ -919,24 +1096,37 @@ class _TripCard extends StatelessWidget {
   final TrajetModel trajet;
   final Color iconColor;
   final Color buttonColor;
+  final String reserveLabel;
+  final String vehicleLabel;
   final VoidCallback onReserve;
 
   const _TripCard({
     required this.trajet,
     required this.iconColor,
     required this.buttonColor,
+    required this.reserveLabel,
+    required this.vehicleLabel,
     required this.onReserve,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = Theme.of(context).cardColor;
+    final borderColor =
+        isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB);
+    final titleColor = isDark ? Colors.white : const Color(0xFF374151);
+    final subtitleColor =
+        isDark ? const Color(0xFFCBD5E1) : const Color(0xFF6B7280);
+    final chipColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFF0F2F6);
+
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 13, 12, 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: const Color(0xFFE5E7EB),
+          color: borderColor,
         ),
       ),
       child: Column(
@@ -960,8 +1150,8 @@ class _TripCard extends StatelessWidget {
             '${trajet.villeDepart} → ${trajet.villeArrivee}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFF374151),
+            style: TextStyle(
+              color: titleColor,
               fontSize: 15,
               fontWeight: FontWeight.w600,
               height: 1.15,
@@ -974,13 +1164,13 @@ class _TripCard extends StatelessWidget {
               vertical: 4,
             ),
             decoration: BoxDecoration(
-              color: const Color(0xFFF0F2F6),
+              color: chipColor,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
               trajet.statut,
-              style: const TextStyle(
-                color: Color(0xFF6B7280),
+              style: TextStyle(
+                color: subtitleColor,
                 fontSize: 10,
               ),
             ),
@@ -990,39 +1180,43 @@ class _TripCard extends StatelessWidget {
             icon: Icons.location_on_outlined,
             iconColor: const Color(0xFF4CD964),
             text: trajet.villeDepart,
+            textColor: subtitleColor,
           ),
           const SizedBox(height: 4),
           _InfoLine(
             icon: Icons.location_on_outlined,
             iconColor: const Color(0xFFE5485D),
             text: trajet.villeArrivee,
+            textColor: subtitleColor,
           ),
           const SizedBox(height: 4),
           _InfoLine(
             icon: Icons.access_time_rounded,
-            iconColor: const Color(0xFF6B7280),
+            iconColor: subtitleColor,
             text: trajet.heureFormatee,
+            textColor: subtitleColor,
           ),
           const SizedBox(height: 4),
           _InfoLine(
             icon: Icons.directions_bus_rounded,
-            iconColor: const Color(0xFF6B7280),
+            iconColor: subtitleColor,
             text: trajet.vehiculeImmatriculation.isEmpty
-                ? 'Véhicule'
+                ? vehicleLabel
                 : trajet.vehiculeImmatriculation,
+            textColor: subtitleColor,
           ),
           const Spacer(),
           Container(
             height: 1,
-            color: const Color(0xFFE5E7EB),
+            color: borderColor,
           ),
           const SizedBox(height: 8),
           Text(
             trajet.prixFormate,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFF374151),
+            style: TextStyle(
+              color: titleColor,
               fontSize: 14,
               fontWeight: FontWeight.w700,
             ),
@@ -1041,9 +1235,9 @@ class _TripCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(11),
                 ),
               ),
-              child: const Text(
-                'Réserver',
-                style: TextStyle(
+              child: Text(
+                reserveLabel,
+                style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1060,11 +1254,13 @@ class _InfoLine extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
   final String text;
+  final Color textColor;
 
   const _InfoLine({
     required this.icon,
     required this.iconColor,
     required this.text,
+    required this.textColor,
   });
 
   @override
@@ -1082,8 +1278,8 @@ class _InfoLine extends StatelessWidget {
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFF6B7280),
+            style: TextStyle(
+              color: textColor,
               fontSize: 12,
             ),
           ),
@@ -1094,54 +1290,68 @@ class _InfoLine extends StatelessWidget {
 }
 
 class _EmptyTrajetCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String resetLabel;
   final VoidCallback onReset;
 
   const _EmptyTrajetCard({
+    required this.title,
+    required this.subtitle,
+    required this.resetLabel,
     required this.onReset,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = Theme.of(context).cardColor;
+    final borderColor =
+        isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB);
+    final titleColor = isDark ? Colors.white : const Color(0xFF374151);
+    final subtitleColor =
+        isDark ? const Color(0xFFCBD5E1) : const Color(0xFF6B7280);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: const Color(0xFFE5E7EB),
+          color: borderColor,
         ),
       ),
       child: Column(
         children: [
-          const Icon(
+          Icon(
             Icons.directions_bus_outlined,
             size: 44,
-            color: Color(0xFF9CA3AF),
+            color: subtitleColor,
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Aucun trajet disponible',
+          Text(
+            title,
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
-              color: Color(0xFF374151),
+              color: titleColor,
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Ajustez les filtres ou réinitialisez la page.',
+          Text(
+            subtitle,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
-              color: Color(0xFF6B7280),
+              color: subtitleColor,
             ),
           ),
           const SizedBox(height: 14),
           OutlinedButton.icon(
             onPressed: onReset,
             icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Réinitialiser'),
+            label: Text(resetLabel),
           ),
         ],
       ),
