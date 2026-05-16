@@ -24,17 +24,27 @@ class SecureStorageService {
     required String username,
   }) async {
     await _storage.write(key: _userIdKey, value: userId);
-
-    if (numericUserId != null && numericUserId.trim().isNotEmpty) {
-      await _storage.write(key: _numericUserIdKey, value: numericUserId);
-    }
-
     await _storage.write(key: _fullNameKey, value: fullName);
     await _storage.write(key: _usernameKey, value: username);
+
+    if (numericUserId != null && numericUserId.trim().isNotEmpty) {
+      await _storage.write(
+        key: _numericUserIdKey,
+        value: numericUserId.trim(),
+      );
+    } else {
+      await _storage.delete(key: _numericUserIdKey);
+    }
   }
 
   Future<void> saveNumericUserId(String numericUserId) async {
-    await _storage.write(key: _numericUserIdKey, value: numericUserId);
+    final cleaned = numericUserId.trim();
+    if (cleaned.isEmpty) {
+      await _storage.delete(key: _numericUserIdKey);
+      return;
+    }
+
+    await _storage.write(key: _numericUserIdKey, value: cleaned);
   }
 
   Future<String?> getUserId() async {

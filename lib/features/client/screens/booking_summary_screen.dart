@@ -59,8 +59,8 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     apiClient = ApiClient(secureStorageService);
     reservationService = ReservationService(apiClient: apiClient);
 
-    _chargerSessionClient();
     _genererChampsPassagers();
+    _chargerSessionClient();
   }
 
   @override
@@ -75,13 +75,39 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
   Future<void> _chargerSessionClient() async {
     final storedName = await secureStorageService.getFullName();
     final storedUserId = await secureStorageService.getNumericUserId();
+    final parsedId = int.tryParse((storedUserId ?? '').trim());
 
     if (!mounted) return;
 
     setState(() {
-      clientNom = storedName ?? '';
-      clientUserId = int.tryParse(storedUserId ?? '');
+      clientNom = (storedName ?? '').trim();
+      clientUserId = parsedId;
     });
+  }
+
+  Future<int?> _reloadClientUserId() async {
+    final storedUserId = await secureStorageService.getNumericUserId();
+    final parsedId = int.tryParse((storedUserId ?? '').trim());
+
+    if (mounted) {
+      setState(() {
+        clientUserId = parsedId;
+      });
+    }
+
+    return parsedId;
+  }
+
+  Future<String> _reloadClientNom() async {
+    final storedName = (await secureStorageService.getFullName() ?? '').trim();
+
+    if (mounted) {
+      setState(() {
+        clientNom = storedName;
+      });
+    }
+
+    return storedName;
   }
 
   int get _nombreAutresPassagers {
@@ -143,12 +169,15 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
   }
 
   Future<void> _confirmerReservation() async {
-    if (clientUserId == null) {
+    final freshClientId = await _reloadClientUserId();
+    await _reloadClientNom();
+
+    if (freshClientId == null) {
       _afficherMessage(
         tr(
           fr: 'Identifiant client introuvable. Déconnectez-vous puis reconnectez-vous.',
-          en: 'Client ID not found. Log out and log back in.',
-          es: 'Identificador del cliente no encontrado. Cierre sesión e inicie sesión de nuevo.',
+          en: 'Client ID not found. Please log out and log back in.',
+          es: 'Identificador del cliente no encontrado. Cierre sesión y vuelva a iniciarla.',
           ar: 'تعذر العثور على معرف العميل. سجّل الخروج ثم ادخل من جديد.',
         ),
       );
@@ -162,6 +191,18 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
           en: 'Please enter the responsible person name.',
           es: 'Por favor ingrese el nombre del responsable.',
           ar: 'يرجى إدخال اسم المسؤول.',
+        ),
+      );
+      return;
+    }
+
+    if (clientFaitPartieDuVoyage && clientNom.trim().isEmpty) {
+      _afficherMessage(
+        tr(
+          fr: 'Nom du client introuvable. Reconnectez-vous puis réessayez.',
+          en: 'Client name not found. Please sign in again and retry.',
+          es: 'Nombre del cliente no encontrado. Inicie sesión nuevamente e inténtelo otra vez.',
+          ar: 'تعذر العثور على اسم العميل. سجّل الدخول مرة أخرى ثم أعد المحاولة.',
         ),
       );
       return;
@@ -181,7 +222,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     }
 
     final request = ReservationRequestModel(
-      userId: clientUserId!,
+      userId: freshClientId,
       trajetId: widget.trajet.id,
       nombrePlace: widget.nombreSieges,
       nomResponsable: _nomResponsable,

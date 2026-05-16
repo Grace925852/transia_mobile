@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
+import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/client/models/reservation_model.dart';
 import 'package:transia_mobile/features/client/services/reservation_service.dart';
@@ -20,6 +21,17 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
 
   bool isLoading = true;
   List<ReservationModel> reservations = [];
+
+  AppPreferencesController get prefs => AppPreferencesController.instance;
+
+  String tr({
+    required String fr,
+    required String en,
+    required String es,
+    required String ar,
+  }) {
+    return prefs.tr(fr: fr, en: en, es: es, ar: ar);
+  }
 
   @override
   void initState() {
@@ -81,28 +93,44 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final titleColor =
+        theme.textTheme.titleLarge?.color ?? const Color(0xFF374151);
+    final mutedColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FF),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: loadTrackingReservations,
           child: ListView(
             padding: const EdgeInsets.all(18),
             children: [
-              const Text(
-                'Suivi GPS',
+              Text(
+                tr(
+                  fr: 'Suivi GPS',
+                  en: 'GPS tracking',
+                  es: 'Seguimiento GPS',
+                  ar: 'تتبع GPS',
+                ),
                 style: TextStyle(
                   fontSize: 30,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF374151),
+                  color: titleColor,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
-                'Vos trajets payés en cours ou à venir.',
+              Text(
+                tr(
+                  fr: 'Vos trajets payés en cours ou à venir.',
+                  en: 'Your paid current or upcoming trips.',
+                  es: 'Sus trayectos pagados en curso o próximos.',
+                  ar: 'رحلاتك المدفوعة الحالية أو القادمة.',
+                ),
                 style: TextStyle(
                   fontSize: 14,
-                  color: Color(0xFF6B7280),
+                  color: mutedColor,
                 ),
               ),
               const SizedBox(height: 18),
@@ -112,23 +140,28 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: theme.cardColor,
                     borderRadius: BorderRadius.circular(24),
                   ),
-                  child: const Column(
+                  child: Column(
                     children: [
                       Icon(
                         Icons.location_off_outlined,
                         size: 54,
-                        color: Color(0xFF9CA3AF),
+                        color: mutedColor,
                       ),
-                      SizedBox(height: 12),
+                      const SizedBox(height: 12),
                       Text(
-                        'Aucun trajet à suivre',
+                        tr(
+                          fr: 'Aucun trajet à suivre',
+                          en: 'No trip to track',
+                          es: 'Ningún trayecto para seguir',
+                          ar: 'لا توجد رحلة للتتبع',
+                        ),
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF374151),
+                          color: titleColor,
                         ),
                       ),
                     ],
@@ -148,7 +181,7 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: theme.cardColor,
                           borderRadius: BorderRadius.circular(22),
                         ),
                         child: Column(
@@ -156,40 +189,45 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
                           children: [
                             Text(
                               reservation.trajetLabel,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF374151),
+                                color: titleColor,
                               ),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               '${reservation.dateDepart} • ${reservation.heureFormatee}',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 14,
-                                color: Color(0xFF6B7280),
+                                color: mutedColor,
                               ),
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Véhicule : ${reservation.vehiculeImmatriculation}',
-                              style: const TextStyle(
+                              '${tr(fr: 'Véhicule', en: 'Vehicle', es: 'Vehículo', ar: 'المركبة')} : ${reservation.vehiculeImmatriculation}',
+                              style: TextStyle(
                                 fontSize: 14,
-                                color: Color(0xFF6B7280),
+                                color: mutedColor,
                               ),
                             ),
                             const SizedBox(height: 12),
-                            const Row(
+                            Row(
                               children: [
-                                Icon(
+                                const Icon(
                                   Icons.location_on,
                                   size: 18,
                                   color: Color(0xFF3158F5),
                                 ),
-                                SizedBox(width: 6),
+                                const SizedBox(width: 6),
                                 Text(
-                                  'Voir le suivi GPS',
-                                  style: TextStyle(
+                                  tr(
+                                    fr: 'Voir le suivi GPS',
+                                    en: 'View GPS tracking',
+                                    es: 'Ver seguimiento GPS',
+                                    ar: 'عرض تتبع GPS',
+                                  ),
+                                  style: const TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w700,
                                     color: Color(0xFF3158F5),

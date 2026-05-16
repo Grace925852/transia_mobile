@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
+import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/client/models/reservation_model.dart';
 import 'package:transia_mobile/features/client/services/payment_status_service.dart';
 import 'package:transia_mobile/features/client/services/reservation_service.dart';
-import 'package:transia_mobile/features/client/screens/rating_screen.dart';
-
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -24,6 +23,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   bool isLoading = true;
   List<ReservationModel> historyReservations = [];
+
+  AppPreferencesController get prefs => AppPreferencesController.instance;
+
+  String tr({
+    required String fr,
+    required String en,
+    required String es,
+    required String ar,
+  }) {
+    return prefs.tr(fr: fr, en: en, es: es, ar: ar);
+  }
 
   @override
   void initState() {
@@ -98,19 +108,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final titleColor =
+        theme.textTheme.titleLarge?.color ?? const Color(0xFF374151);
+    final mutedColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FF),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF374151)),
-        title: const Text(
-          'Historique',
-          style: TextStyle(
-            color: Color(0xFF374151),
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
+        title: Text(
+          tr(
+            fr: 'Historique',
+            en: 'History',
+            es: 'Historial',
+            ar: 'السجل',
           ),
         ),
         actions: [
@@ -129,30 +141,40 @@ class _HistoryScreenState extends State<HistoryScreen> {
             : historyReservations.isEmpty
                 ? ListView(
                     padding: const EdgeInsets.all(24),
-                    children: const [
-                      SizedBox(height: 80),
+                    children: [
+                      const SizedBox(height: 80),
                       Icon(
                         Icons.history_rounded,
                         size: 54,
-                        color: Color(0xFF9CA3AF),
+                        color: mutedColor,
                       ),
-                      SizedBox(height: 14),
+                      const SizedBox(height: 14),
                       Text(
-                        'Aucun historique',
+                        tr(
+                          fr: 'Aucun historique',
+                          en: 'No history',
+                          es: 'Sin historial',
+                          ar: 'لا يوجد سجل',
+                        ),
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF374151),
+                          color: titleColor,
                         ),
                       ),
-                      SizedBox(height: 8),
+                      const SizedBox(height: 8),
                       Text(
-                        'Seules les réservations payées et déjà passées apparaissent ici.',
+                        tr(
+                          fr: 'Seules les réservations payées et déjà passées apparaissent ici.',
+                          en: 'Only paid and completed reservations appear here.',
+                          es: 'Solo las reservas pagadas y finalizadas aparecen aquí.',
+                          ar: 'تظهر هنا فقط الحجوزات المدفوعة والمنتهية.',
+                        ),
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,
-                          color: Color(0xFF6B7280),
+                          color: mutedColor,
                         ),
                       ),
                     ],
@@ -167,7 +189,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       return Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: theme.cardColor,
                           borderRadius: BorderRadius.circular(22),
                         ),
                         child: Column(
@@ -175,33 +197,38 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           children: [
                             Text(
                               reservation.trajetLabel,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF374151),
+                                color: titleColor,
                               ),
                             ),
                             const SizedBox(height: 10),
                             _HistoryRow(
-                              label: 'Date',
+                              label: tr(fr: 'Date', en: 'Date', es: 'Fecha', ar: 'التاريخ'),
                               value: reservation.dateDepart.isEmpty
                                   ? '-'
                                   : reservation.dateDepart,
                             ),
                             _HistoryRow(
-                              label: 'Heure',
+                              label: tr(fr: 'Heure', en: 'Time', es: 'Hora', ar: 'الوقت'),
                               value: reservation.heureFormatee.isEmpty
                                   ? '-'
                                   : reservation.heureFormatee,
                             ),
                             _HistoryRow(
-                              label: 'Responsable',
+                              label: tr(
+                                fr: 'Responsable',
+                                en: 'Responsible',
+                                es: 'Responsable',
+                                ar: 'المسؤول',
+                              ),
                               value: reservation.clientNom.isEmpty
                                   ? '-'
                                   : reservation.clientNom,
                             ),
                             _HistoryRow(
-                              label: 'Montant',
+                              label: tr(fr: 'Montant', en: 'Amount', es: 'Monto', ar: 'المبلغ'),
                               value: reservation.prixFormate,
                             ),
                             const SizedBox(height: 14),
@@ -228,16 +255,23 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                               BorderRadius.circular(12),
                                         ),
                                       ),
-                                      child: const Row(
+                                      child: Row(
                                         mainAxisAlignment:
                                             MainAxisAlignment.center,
                                         children: [
-                                          Icon(
+                                          const Icon(
                                             Icons.star_outline_rounded,
                                             size: 18,
                                           ),
-                                          SizedBox(width: 6),
-                                          Text('Noter'),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            tr(
+                                              fr: 'Noter',
+                                              en: 'Rate',
+                                              es: 'Calificar',
+                                              ar: 'قيّم',
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -264,7 +298,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                               BorderRadius.circular(12),
                                         ),
                                       ),
-                                      child: const Text('Voir le billet'),
+                                      child: Text(
+                                        tr(
+                                          fr: 'Voir le billet',
+                                          en: 'View ticket',
+                                          es: 'Ver boleto',
+                                          ar: 'عرض التذكرة',
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -291,6 +332,12 @@ class _HistoryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final mutedColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
+    final normalTextColor =
+        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -298,9 +345,9 @@ class _HistoryRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                color: Color(0xFF6B7280),
+                color: mutedColor,
               ),
             ),
           ),
@@ -308,10 +355,10 @@ class _HistoryRow extends StatelessWidget {
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF374151),
+                color: normalTextColor,
               ),
             ),
           ),

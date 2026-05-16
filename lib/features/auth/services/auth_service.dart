@@ -13,30 +13,124 @@ class AuthService {
     required this.secureStorageService,
   });
 
-  Future<String?> _findNumericUserIdByUsername(String username) async {
+  Future<String?> _findNumericUserId({
+    required String username,
+    required String fullName,
+    String? authId,
+  }) async {
     try {
       final response = await apiClient.dio.get('/api/v1/users');
 
-      if (response.data is! List) return null;
+      if (response.data is! List) {
+        return _fallbackNumericUserId(
+          username: username,
+          fullName: fullName,
+          authId: authId,
+        );
+      }
+
+      final wantedUsername = username.trim().toLowerCase();
+      final wantedName = fullName.trim().toLowerCase();
+      final wantedAuthId = (authId ?? '').trim();
 
       for (final item in response.data as List) {
         if (item is! Map) continue;
 
         final userMap = Map<String, dynamic>.from(item as Map);
-        final currentUsername = (userMap['username'] ?? '').toString().trim();
 
-        if (currentUsername == username.trim()) {
-          final numericId = userMap['id'];
-          if (numericId != null) {
-            return numericId.toString();
+        final currentUsername =
+            (userMap['username'] ?? '').toString().trim().toLowerCase();
+        final currentFullName =
+            (userMap['fullName'] ?? '').toString().trim().toLowerCase();
+        final currentId = userMap['id']?.toString().trim() ?? '';
+
+        final usernameMatch =
+            wantedUsername.isNotEmpty && currentUsername == wantedUsername;
+        final fullNameMatch =
+            wantedName.isNotEmpty && currentFullName == wantedName;
+        final authIdMatch =
+            wantedAuthId.isNotEmpty && currentId == wantedAuthId;
+
+        if (usernameMatch || fullNameMatch || authIdMatch) {
+          if (currentId.isNotEmpty) {
+            return currentId;
           }
         }
       }
 
-      return null;
+      return _fallbackNumericUserId(
+        username: username,
+        fullName: fullName,
+        authId: authId,
+      );
     } catch (_) {
-      return null;
+      return _fallbackNumericUserId(
+        username: username,
+        fullName: fullName,
+        authId: authId,
+      );
     }
+  }
+
+  String _extractReadableError(dynamic data) {
+    if (data == null) return '';
+
+    if (data is String) return data;
+
+    if (data is Map) {
+      final map = Map<String, dynamic>.from(data);
+      final message = map['message']?.toString() ?? '';
+      if (message.trim().isNotEmpty) {
+        return message.trim();
+      }
+      return map.toString();
+    }
+
+    return data.toString();
+  }
+
+  String _normalizeLoginError(DioException e) {
+    final rawMessage = _extractReadableError(e.response?.data).toLowerCase();
+
+    if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+      return 'Numéro de téléphone ou mot de passe incorrect.';
+    }
+
+    if (rawMessage.contains('paramètres de connexion sont incorrectes') ||
+        rawMessage.contains('parametres de connexion sont incorrectes') ||
+        rawMessage.contains('connexion sont incorrectes') ||
+        rawMessage.contains('mot de passe incorrect') ||
+        rawMessage.contains('username or password') ||
+        rawMessage.contains('bad credentials') ||
+        rawMessage.contains('login incorrect')) {
+      return 'Numéro de téléphone ou mot de passe incorrect.';
+    }
+
+    return 'Erreur de connexion au serveur.';
+  }
+
+  String _normalizeRegisterError(DioException e) {
+    final rawMessage = _extractReadableError(e.response?.data).toLowerCase();
+
+    if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+      return "L'inscription client n'est pas autorisée pour le moment.";
+    }
+
+    if (rawMessage.contains('already') ||
+        rawMessage.contains('existe') ||
+        rawMessage.contains('duplicate') ||
+        rawMessage.contains('déjà utilisé') ||
+        rawMessage.contains('deja utilise')) {
+      return 'Ce numéro est déjà utilisé.';
+    }
+
+    if (rawMessage.contains('role_id') ||
+        rawMessage.contains('null viole la contrainte') ||
+        rawMessage.contains('viole la contrainte not null')) {
+      return "Erreur de création du compte client.";
+    }
+
+    return "Erreur lors de l'inscription.";
   }
 
   Future<AuthResponse> login({
@@ -58,15 +152,14 @@ class AuthService {
         throw Exception('Token introuvable dans la réponse du serveur.');
       }
 
-      await secureStorageService.saveToken(authResponse.token);
-
-      String? numericUserId =
-          await _findNumericUserIdByUsername(authResponse.username);
-
-      numericUserId ??= _fallbackNumericUserId(
+      final numericUserId = await _findNumericUserId(
         username: authResponse.username,
         fullName: authResponse.fullName,
+        authId: authResponse.id,
       );
+
+      await secureStorageService.clearSession();
+      await secureStorageService.saveToken(authResponse.token);
 
       await secureStorageService.saveUserSession(
         userId: authResponse.id,
@@ -77,13 +170,7 @@ class AuthService {
 
       return authResponse;
     } on DioException catch (e) {
-      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
-        throw Exception('Numéro ou mot de passe incorrect.');
-      }
-
-      throw Exception(
-        e.response?.data?.toString() ?? 'Erreur de connexion au serveur.',
-      );
+      throw Exception(_normalizeLoginError(e));
     } catch (e) {
       throw Exception(e.toString().replaceAll('Exception: ', ''));
     }
@@ -92,50 +179,66 @@ class AuthService {
   String? _fallbackNumericUserId({
     required String username,
     required String fullName,
+    String? authId,
   }) {
     final u = username.trim().toLowerCase();
     final n = fullName.trim().toLowerCase();
+    final a = (authId ?? '').trim();
+
+    if (RegExp(r'^\d+$').hasMatch(a)) {
+      return a;
+    }
 
     if (u == '90000000' || n == 'koffi akakpo') return '5';
     if (u == '91000000' || n == 'afi secretaire') return '3';
     if (u == '92000000' || n == 'kodjo chauffeur') return '4';
-    if (u == 'atta' || n == 'atta esso-lotié') return '6';
+    if (u == 'atta' || n == 'atta esso-lotié' || n == 'atta essolotie') {
+      return '6';
+    }
 
     return null;
   }
 
   Future<void> register({
-    required String fullName,
-    required String username,
-    required String password,
-  }) async {
-    try {
-      await apiClient.dio.post(
-        ApiConstants.register,
-        data: {
-          'fullName': fullName,
-          'username': username,
-          'password': password,
-          'enable': true,
-          'roles': {
-            'id': 5,
+      required String fullName,
+      required String username,
+      required String password,
+    }) async {
+      try {
+        await apiClient.dio.post(
+          ApiConstants.register,
+          data: {
+            'fullName': fullName.trim(),
+            'username': username.trim(),
+            'password': password,
+            'roles': {
+              'id': 5,
+              'name': 'CLIENT',
+            },
+            'enable': true,
+            'publicId': null,
           },
-        },
-      );
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
-        throw Exception(
-          "L'inscription client n'est pas autorisée. Vérifie si /api/v1/users est public ou s'il faut un token admin.",
         );
-      }
+      } on DioException catch (e) {
+        final rawMessage = _extractReadableError(e.response?.data).toLowerCase();
 
-      throw Exception(
-        e.response?.data?.toString() ?? "Erreur lors de l'inscription.",
-      );
-    } catch (e) {
-      throw Exception(e.toString().replaceAll('Exception: ', ''));
+        if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+          throw Exception("L'inscription client n'est pas autorisée pour le moment.");
+        }
+
+        if (rawMessage.contains('already') ||
+            rawMessage.contains('existe') ||
+            rawMessage.contains('duplicate') ||
+            rawMessage.contains('déjà utilisé') ||
+            rawMessage.contains('deja utilise')) {
+          throw Exception('Ce numéro est déjà utilisé.');
+        }
+
+        throw Exception("Erreur lors de l'inscription.");
+      } catch (e) {
+        throw Exception(e.toString().replaceAll('Exception: ', ''));
+      }
     }
-  }
 
   Future<void> logout() async {
     await secureStorageService.deleteToken();

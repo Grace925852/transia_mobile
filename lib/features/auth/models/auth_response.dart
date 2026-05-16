@@ -17,9 +17,17 @@ class AuthResponse {
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) {
     return AuthResponse(
-      id: json['id']?.toString() ?? '',
-      fullName: json['fullName']?.toString() ?? '',
-      username: json['username']?.toString() ?? '',
+      id: json['id']?.toString() ??
+          json['userId']?.toString() ??
+          json['publicId']?.toString() ??
+          '',
+      fullName: json['fullName']?.toString() ??
+          json['name']?.toString() ??
+          json['nom']?.toString() ??
+          '',
+      username: json['username']?.toString() ??
+          json['login']?.toString() ??
+          '',
       token: json['token']?.toString() ??
           json['accessToken']?.toString() ??
           '',

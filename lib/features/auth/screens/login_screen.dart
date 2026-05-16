@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
+import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/auth/services/auth_service.dart';
 
@@ -33,9 +34,17 @@ class _LoginScreenState extends State<LoginScreen> {
   bool isLoading = false;
 
   final Color primaryBlue = const Color(0xFF3158F5);
-  final Color backgroundColor = const Color(0xFFF5F7FF);
-  final Color textColor = const Color(0xFF374151);
-  final Color hintColor = const Color(0xFF9CA3AF);
+
+  AppPreferencesController get prefs => AppPreferencesController.instance;
+
+  String tr({
+    required String fr,
+    required String en,
+    required String es,
+    required String ar,
+  }) {
+    return prefs.tr(fr: fr, en: en, es: es, ar: ar);
+  }
 
   @override
   void dispose() {
@@ -68,7 +77,14 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = loginPasswordController.text.trim();
 
     if (username.isEmpty || password.isEmpty) {
-      showMessage('Veuillez remplir tous les champs.');
+      showMessage(
+        tr(
+          fr: 'Veuillez remplir tous les champs.',
+          en: 'Please fill in all fields.',
+          es: 'Por favor complete todos los campos.',
+          ar: 'يرجى ملء جميع الحقول.',
+        ),
+      );
       return;
     }
 
@@ -84,12 +100,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      showMessage('Bienvenue ${user.fullName}');
+      showMessage(
+        tr(
+          fr: 'Bienvenue ${user.fullName}',
+          en: 'Welcome ${user.fullName}',
+          es: 'Bienvenido ${user.fullName}',
+          ar: 'مرحبًا ${user.fullName}',
+        ),
+      );
       context.go(AppRoutes.client);
     } catch (e) {
-      showMessage(
-        e.toString().replaceAll('Exception: ', ''),
-      );
+      showMessage(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) {
         setState(() => isLoading = false);
@@ -107,17 +128,38 @@ class _LoginScreenState extends State<LoginScreen> {
         username.isEmpty ||
         password.isEmpty ||
         confirmPassword.isEmpty) {
-      showMessage('Veuillez remplir tous les champs.');
+      showMessage(
+        tr(
+          fr: 'Veuillez remplir tous les champs.',
+          en: 'Please fill in all fields.',
+          es: 'Por favor complete todos los campos.',
+          ar: 'يرجى ملء جميع الحقول.',
+        ),
+      );
       return;
     }
 
     if (password != confirmPassword) {
-      showMessage('Les mots de passe ne correspondent pas.');
+      showMessage(
+        tr(
+          fr: 'Les mots de passe ne correspondent pas.',
+          en: 'Passwords do not match.',
+          es: 'Las contraseñas no coinciden.',
+          ar: 'كلمتا المرور غير متطابقتين.',
+        ),
+      );
       return;
     }
 
     if (password.length < 4) {
-      showMessage('Le mot de passe est trop court.');
+      showMessage(
+        tr(
+          fr: 'Le mot de passe est trop court.',
+          en: 'The password is too short.',
+          es: 'La contraseña es demasiado corta.',
+          ar: 'كلمة المرور قصيرة جدًا.',
+        ),
+      );
       return;
     }
 
@@ -134,7 +176,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      showMessage('Inscription réussie. Vous pouvez maintenant vous connecter.');
+      showMessage(
+        tr(
+          fr: 'Inscription réussie. Vous pouvez maintenant vous connecter.',
+          en: 'Registration successful. You can now sign in.',
+          es: 'Registro exitoso. Ahora puede iniciar sesión.',
+          ar: 'تم التسجيل بنجاح. يمكنك الآن تسجيل الدخول.',
+        ),
+      );
 
       setState(() {
         isLoginMode = true;
@@ -145,9 +194,7 @@ class _LoginScreenState extends State<LoginScreen> {
       registerPasswordController.clear();
       registerConfirmPasswordController.clear();
     } catch (e) {
-      showMessage(
-        e.toString().replaceAll('Exception: ', ''),
-      );
+      showMessage(e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) {
         setState(() => isLoading = false);
@@ -156,6 +203,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget buildInputField({
+    required BuildContext context,
     required String label,
     required TextEditingController controller,
     required IconData icon,
@@ -164,6 +212,13 @@ class _LoginScreenState extends State<LoginScreen> {
     TextInputType keyboardType = TextInputType.text,
     String? hintText,
   }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor =
+        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
+    final hintColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF9CA3AF);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -178,16 +233,17 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: isDark ? const Color(0xFF111827) : Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: const Color(0xFFE5E7EB),
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB),
             ),
           ),
           child: TextField(
             controller: controller,
             obscureText: obscureText,
             keyboardType: keyboardType,
+            style: TextStyle(color: textColor),
             decoration: InputDecoration(
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
@@ -218,11 +274,16 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget buildModeSwitcher() {
+  Widget buildModeSwitcher(BuildContext context) {
+    final theme = Theme.of(context);
+    final textColor =
+        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5FF),
+        color: isDark ? const Color(0xFF172554) : const Color(0xFFF1F5FF),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -241,7 +302,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  'Connexion',
+                  tr(
+                    fr: 'Connexion',
+                    en: 'Sign in',
+                    es: 'Conexión',
+                    ar: 'تسجيل الدخول',
+                  ),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: isLoginMode ? Colors.white : textColor,
@@ -266,7 +332,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  'Inscription',
+                  tr(
+                    fr: 'Inscription',
+                    en: 'Register',
+                    es: 'Registro',
+                    ar: 'إنشاء حساب',
+                  ),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: !isLoginMode ? Colors.white : textColor,
@@ -282,29 +353,57 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget buildLoginForm() {
+  Widget buildLoginForm(BuildContext context) {
+    final theme = Theme.of(context);
+    final textColor =
+        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
+    final subtitleColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Connectez-vous à votre compte client',
+          tr(
+            fr: 'Connectez-vous à votre compte client',
+            en: 'Sign in to your client account',
+            es: 'Conéctese a su cuenta de cliente',
+            ar: 'سجّل الدخول إلى حساب العميل الخاص بك',
+          ),
           style: TextStyle(
             fontSize: 14,
-            color: textColor.withOpacity(0.75),
+            color: subtitleColor,
             height: 1.4,
           ),
         ),
         const SizedBox(height: 24),
         buildInputField(
-          label: 'Numéro de téléphone',
+          context: context,
+          label: tr(
+            fr: 'Numéro de téléphone',
+            en: 'Phone number',
+            es: 'Número de teléfono',
+            ar: 'رقم الهاتف',
+          ),
           controller: loginPhoneController,
           icon: Icons.phone_outlined,
           keyboardType: TextInputType.phone,
-          hintText: 'Entrez votre numéro',
+          hintText: tr(
+            fr: 'Entrez votre numéro',
+            en: 'Enter your number',
+            es: 'Ingrese su número',
+            ar: 'أدخل رقمك',
+          ),
         ),
         const SizedBox(height: 18),
         buildInputField(
-          label: 'Mot de passe',
+          context: context,
+          label: tr(
+            fr: 'Mot de passe',
+            en: 'Password',
+            es: 'Contraseña',
+            ar: 'كلمة المرور',
+          ),
           controller: loginPasswordController,
           icon: Icons.lock_outline_rounded,
           obscureText: obscureLoginPassword,
@@ -313,7 +412,12 @@ class _LoginScreenState extends State<LoginScreen> {
               obscureLoginPassword = !obscureLoginPassword;
             });
           },
-          hintText: 'Entrez votre mot de passe',
+          hintText: tr(
+            fr: 'Entrez votre mot de passe',
+            en: 'Enter your password',
+            es: 'Ingrese su contraseña',
+            ar: 'أدخل كلمة المرور',
+          ),
         ),
         const SizedBox(height: 26),
         SizedBox(
@@ -321,14 +425,6 @@ class _LoginScreenState extends State<LoginScreen> {
           height: 56,
           child: ElevatedButton(
             onPressed: isLoading ? null : login,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryBlue,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-            ),
             child: isLoading
                 ? const SizedBox(
                     height: 22,
@@ -338,9 +434,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       strokeWidth: 2.4,
                     ),
                   )
-                : const Text(
-                    'Se connecter',
-                    style: TextStyle(
+                : Text(
+                    tr(
+                      fr: 'Se connecter',
+                      en: 'Sign in',
+                      es: 'Iniciar sesión',
+                      ar: 'تسجيل الدخول',
+                    ),
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                     ),
@@ -351,36 +452,73 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget buildRegisterForm() {
+  Widget buildRegisterForm(BuildContext context) {
+    final theme = Theme.of(context);
+    final subtitleColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Créez votre compte client',
+          tr(
+            fr: 'Créez votre compte client',
+            en: 'Create your client account',
+            es: 'Cree su cuenta de cliente',
+            ar: 'أنشئ حساب العميل الخاص بك',
+          ),
           style: TextStyle(
             fontSize: 14,
-            color: textColor.withOpacity(0.75),
+            color: subtitleColor,
             height: 1.4,
           ),
         ),
         const SizedBox(height: 24),
         buildInputField(
-          label: 'Nom complet',
+          context: context,
+          label: tr(
+            fr: 'Nom complet',
+            en: 'Full name',
+            es: 'Nombre completo',
+            ar: 'الاسم الكامل',
+          ),
           controller: registerFullNameController,
           icon: Icons.person_outline_rounded,
-          hintText: 'Ex : Koffi AKAKPO',
+          hintText: tr(
+            fr: 'Ex : Koffi AKAKPO',
+            en: 'Ex: Koffi AKAKPO',
+            es: 'Ej: Koffi AKAKPO',
+            ar: 'مثال: Koffi AKAKPO',
+          ),
         ),
         const SizedBox(height: 18),
         buildInputField(
-          label: 'Numéro de téléphone',
+          context: context,
+          label: tr(
+            fr: 'Numéro de téléphone',
+            en: 'Phone number',
+            es: 'Número de teléfono',
+            ar: 'رقم الهاتف',
+          ),
           controller: registerPhoneController,
           icon: Icons.phone_outlined,
           keyboardType: TextInputType.phone,
-          hintText: 'Entrez votre numéro',
+          hintText: tr(
+            fr: 'Entrez votre numéro',
+            en: 'Enter your number',
+            es: 'Ingrese su número',
+            ar: 'أدخل رقمك',
+          ),
         ),
         const SizedBox(height: 18),
         buildInputField(
-          label: 'Mot de passe',
+          context: context,
+          label: tr(
+            fr: 'Mot de passe',
+            en: 'Password',
+            es: 'Contraseña',
+            ar: 'كلمة المرور',
+          ),
           controller: registerPasswordController,
           icon: Icons.lock_outline_rounded,
           obscureText: obscureRegisterPassword,
@@ -389,11 +527,22 @@ class _LoginScreenState extends State<LoginScreen> {
               obscureRegisterPassword = !obscureRegisterPassword;
             });
           },
-          hintText: 'Créez un mot de passe',
+          hintText: tr(
+            fr: 'Créez un mot de passe',
+            en: 'Create a password',
+            es: 'Cree una contraseña',
+            ar: 'أنشئ كلمة مرور',
+          ),
         ),
         const SizedBox(height: 18),
         buildInputField(
-          label: 'Confirmer le mot de passe',
+          context: context,
+          label: tr(
+            fr: 'Confirmer le mot de passe',
+            en: 'Confirm password',
+            es: 'Confirmar contraseña',
+            ar: 'تأكيد كلمة المرور',
+          ),
           controller: registerConfirmPasswordController,
           icon: Icons.lock_outline_rounded,
           obscureText: obscureRegisterConfirmPassword,
@@ -403,7 +552,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   !obscureRegisterConfirmPassword;
             });
           },
-          hintText: 'Confirmez le mot de passe',
+          hintText: tr(
+            fr: 'Confirmez le mot de passe',
+            en: 'Confirm password',
+            es: 'Confirme la contraseña',
+            ar: 'أكد كلمة المرور',
+          ),
         ),
         const SizedBox(height: 26),
         SizedBox(
@@ -411,14 +565,6 @@ class _LoginScreenState extends State<LoginScreen> {
           height: 56,
           child: ElevatedButton(
             onPressed: isLoading ? null : register,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryBlue,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-            ),
             child: isLoading
                 ? const SizedBox(
                     height: 22,
@@ -428,9 +574,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       strokeWidth: 2.4,
                     ),
                   )
-                : const Text(
-                    'S’inscrire',
-                    style: TextStyle(
+                : Text(
+                    tr(
+                      fr: 'S’inscrire',
+                      en: 'Register',
+                      es: 'Registrarse',
+                      ar: 'إنشاء حساب',
+                    ),
+                    style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                     ),
@@ -443,6 +594,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pageBackground = theme.scaffoldBackgroundColor;
+    final cardColor = theme.cardColor;
+    final textColor =
+        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
       backgroundColor: primaryBlue,
       body: SafeArea(
@@ -482,7 +640,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            'Transport intelligent pour tous',
+                            tr(
+                              fr: 'Transport intelligent pour tous',
+                              en: 'Smart transport for everyone',
+                              es: 'Transporte inteligente para todos',
+                              ar: 'نقل ذكي للجميع',
+                            ),
                             style: TextStyle(
                               fontSize: 18,
                               color: Colors.white.withOpacity(0.85),
@@ -501,7 +664,7 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: backgroundColor,
+                  color: pageBackground,
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(34),
                     topRight: Radius.circular(34),
@@ -510,17 +673,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(22, 28, 22, 28),
                   children: [
-                    buildModeSwitcher(),
+                    buildModeSwitcher(context),
                     const SizedBox(height: 18),
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: cardColor,
                         borderRadius: BorderRadius.circular(28),
                       ),
                       child: isLoginMode
-                          ? buildLoginForm()
-                          : buildRegisterForm(),
+                          ? buildLoginForm(context)
+                          : buildRegisterForm(context),
                     ),
                     const SizedBox(height: 14),
                     if (isLoginMode)
@@ -530,8 +693,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             isLoginMode = false;
                           });
                         },
-                        child: const Text(
-                          'Vous n’avez pas de compte ? Inscrivez-vous',
+                        child: Text(
+                          tr(
+                            fr: 'Vous n’avez pas de compte ? Inscrivez-vous',
+                            en: 'Don’t have an account? Sign up',
+                            es: '¿No tiene cuenta? Regístrese',
+                            ar: 'ليس لديك حساب؟ أنشئ حسابًا',
+                          ),
+                          style: TextStyle(color: isDark ? Colors.white70 : textColor),
                         ),
                       )
                     else
@@ -541,8 +710,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             isLoginMode = true;
                           });
                         },
-                        child: const Text(
-                          'Vous avez déjà un compte ? Connectez-vous',
+                        child: Text(
+                          tr(
+                            fr: 'Vous avez déjà un compte ? Connectez-vous',
+                            en: 'Already have an account? Sign in',
+                            es: '¿Ya tiene cuenta? Inicie sesión',
+                            ar: 'لديك حساب بالفعل؟ سجّل الدخول',
+                          ),
+                          style: TextStyle(color: isDark ? Colors.white70 : textColor),
                         ),
                       ),
                   ],

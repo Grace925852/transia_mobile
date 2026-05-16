@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 import 'package:transia_mobile/features/client/models/reservation_model.dart';
 
 class TrackingDetailScreen extends StatefulWidget {
@@ -19,12 +20,36 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
   String chauffeurNom = 'Chauffeur';
   bool isLoading = false;
 
+  AppPreferencesController get prefs => AppPreferencesController.instance;
+
+  String tr({
+    required String fr,
+    required String en,
+    required String es,
+    required String ar,
+  }) {
+    return prefs.tr(fr: fr, en: en, es: es, ar: ar);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final titleColor =
+        theme.textTheme.titleLarge?.color ?? const Color(0xFF374151);
+    final mutedColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FF),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Suivi GPS'),
+        title: Text(
+          tr(
+            fr: 'Suivi GPS',
+            en: 'GPS tracking',
+            es: 'Seguimiento GPS',
+            ar: 'تتبع GPS',
+          ),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(18),
@@ -32,7 +57,7 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.cardColor,
               borderRadius: BorderRadius.circular(22),
             ),
             child: Column(
@@ -40,26 +65,26 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
               children: [
                 Text(
                   widget.reservation.trajetLabel,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151),
+                    color: titleColor,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   '${widget.reservation.dateDepart} • ${widget.reservation.heureFormatee}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF6B7280),
+                    color: mutedColor,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Chauffeur : $chauffeurNom',
-                  style: const TextStyle(
+                  '${tr(fr: 'Chauffeur', en: 'Driver', es: 'Conductor', ar: 'السائق')} : $chauffeurNom',
+                  style: TextStyle(
                     fontSize: 14,
-                    color: Color(0xFF6B7280),
+                    color: mutedColor,
                   ),
                 ),
               ],
@@ -69,31 +94,38 @@ class _TrackingDetailScreenState extends State<TrackingDetailScreen> {
           Container(
             height: 360,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.cardColor,
               borderRadius: BorderRadius.circular(22),
             ),
-            child: const Center(
-              child: Text(
-                'Carte GPS à brancher ici',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Color(0xFF6B7280),
-                ),
-              ),
+            child: Center(
+              child: isLoading
+                  ? const CircularProgressIndicator()
+                  : Text(
+                      tr(
+                        fr: 'Carte GPS à brancher ici',
+                        en: 'GPS map to connect here',
+                        es: 'Mapa GPS para conectar aquí',
+                        ar: 'خريطة GPS تُربط هنا',
+                      ),
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: mutedColor,
+                      ),
+                    ),
             ),
           ),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.cardColor,
               borderRadius: BorderRadius.circular(22),
             ),
             child: Text(
-              'Position actuelle : $latitude , $longitude',
-              style: const TextStyle(
+              '${tr(fr: 'Position actuelle', en: 'Current position', es: 'Posición actual', ar: 'الموقع الحالي')} : $latitude , $longitude',
+              style: TextStyle(
                 fontSize: 14,
-                color: Color(0xFF374151),
+                color: theme.textTheme.bodyLarge?.color,
               ),
             ),
           ),
