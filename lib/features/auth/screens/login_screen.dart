@@ -355,7 +355,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget buildLoginForm(BuildContext context) {
     final theme = Theme.of(context);
-    final textColor =
+    final titleColor =
         theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
     final subtitleColor =
         theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
@@ -592,6 +592,38 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+Widget _buildLogo() {
+  return Container(
+    height: 180,
+    width: 180,
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(34),
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(34),
+      child: OverflowBox(
+        maxWidth: double.infinity,
+        maxHeight: double.infinity,
+        child: Transform.scale(
+          scale: 0.30,
+          child: Image.asset(
+            'assets/images/logo.png',
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) {
+              return Icon(
+                Icons.directions_bus_rounded,
+                size: 100,
+                color: primaryBlue,
+              );
+            },
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -616,24 +648,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     Center(
                       child: Column(
                         children: [
-                          Container(
-                            height: 140,
-                            width: 140,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(32),
-                            ),
-                            child: Icon(
-                              Icons.directions_bus_rounded,
-                              size: 62,
-                              color: primaryBlue,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
+                          _buildLogo(),
+                          const SizedBox(height: 22),
                           const Text(
                             'Transia',
                             style: TextStyle(
-                              fontSize: 42,
+                              fontSize: 38,
                               fontWeight: FontWeight.w700,
                               color: Colors.white,
                             ),
@@ -646,9 +666,10 @@ class _LoginScreenState extends State<LoginScreen> {
                               es: 'Transporte inteligente para todos',
                               ar: 'نقل ذكي للجميع',
                             ),
+                            textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 18,
-                              color: Colors.white.withOpacity(0.85),
+                              color: Colors.white.withOpacity(0.88),
                             ),
                           ),
                         ],
@@ -700,7 +721,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             es: '¿No tiene cuenta? Regístrese',
                             ar: 'ليس لديك حساب؟ أنشئ حسابًا',
                           ),
-                          style: TextStyle(color: isDark ? Colors.white70 : textColor),
+                          style: TextStyle(
+                            color: isDark ? Colors.white70 : textColor,
+                          ),
                         ),
                       )
                     else
@@ -717,7 +740,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             es: '¿Ya tiene cuenta? Inicie sesión',
                             ar: 'لديك حساب بالفعل؟ سجّل الدخول',
                           ),
-                          style: TextStyle(color: isDark ? Colors.white70 : textColor),
+                          style: TextStyle(
+                            color: isDark ? Colors.white70 : textColor,
+                          ),
                         ),
                       ),
                   ],

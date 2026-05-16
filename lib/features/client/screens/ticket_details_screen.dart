@@ -5,17 +5,20 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 import 'package:transia_mobile/features/client/models/reservation_model.dart';
 
-class TicketDetailsScreen extends StatelessWidget {
+class TicketDetailsScreen extends StatefulWidget {
   final ReservationModel reservation;
 
-  const TicketDetailsScreen({
-    super.key,
-    required this.reservation,
-  });
+  const TicketDetailsScreen({super.key, required this.reservation});
 
+  @override
+  State<TicketDetailsScreen> createState() => _TicketDetailsScreenState();
+}
+
+class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
   AppPreferencesController get prefs => AppPreferencesController.instance;
 
   String tr({
@@ -33,7 +36,7 @@ class TicketDetailsScreen extends StatelessWidget {
   }
 
   List<Map<String, dynamic>> _extractBillets() {
-    final raw = reservation.rawData;
+    final raw = widget.reservation.rawData;
 
     final dynamic billetsData =
         raw['billets'] ??
@@ -52,7 +55,7 @@ class TicketDetailsScreen extends StatelessWidget {
   }
 
   List<String> _extractSeatNumbers() {
-    final raw = reservation.rawData;
+    final raw = widget.reservation.rawData;
     final billets = _extractBillets();
     final Set<String> seats = {};
 
@@ -114,11 +117,11 @@ class TicketDetailsScreen extends StatelessWidget {
 
   List<String> _buildPassengerDisplayList() {
     final responsible = _safe(
-      reservation.clientNom,
+      widget.reservation.clientNom,
       fallback: 'Responsable',
     );
 
-    if (reservation.nombrePlace <= 1) {
+    if (widget.reservation.nombrePlace <= 1) {
       return [responsible];
     }
 
@@ -126,7 +129,7 @@ class TicketDetailsScreen extends StatelessWidget {
     final List<String> result = [responsible];
     int inviteCounter = 1;
 
-    for (int index = 1; index < reservation.nombrePlace; index++) {
+    for (int index = 1; index < widget.reservation.nombrePlace; index++) {
       final rawValue = index < rawPassengers.length
           ? rawPassengers[index].trim()
           : '';
@@ -163,24 +166,141 @@ class TicketDetailsScreen extends StatelessWidget {
 
   String _buildQrDataForTicket(_PassengerTicketData ticket) {
     return [
-      'RESERVATION_ID:${reservation.id}',
+      'RESERVATION_ID:${widget.reservation.id}',
       'TICKET_INDEX:${ticket.ticketIndex}/${ticket.totalTickets}',
       'PASSAGER:${ticket.passengerName}',
-      'TRAJET:${reservation.trajetLabel}',
-      'DATE:${reservation.dateDepart}',
-      'HEURE:${reservation.heureFormatee}',
+      'TRAJET:${widget.reservation.trajetLabel}',
+      'DATE:${widget.reservation.dateDepart}',
+      'HEURE:${widget.reservation.heureFormatee}',
       'SIEGE:${ticket.seatNumber}',
-      'PRIX:${reservation.prixFormate}',
-      'STATUT:${reservation.statut}',
+      'PRIX:${widget.reservation.prixFormate}',
+      'STATUT:${widget.reservation.statut}',
     ].join('|');
   }
 
-  Future<Uint8List> _buildPdf() async {
-    final pdf = pw.Document();
-    final tickets = _buildTicketData();
+  String _buildDateTimeLine() {
+    final date = _safe(widget.reservation.dateDepart);
+    final time = _safe(widget.reservation.heureFormatee);
 
-    for (final ticket in tickets) {
-      final qrImage = await pw.Barcode.qrCode().toSvg(
+    if (date == '-' && time == '-') return '-';
+    if (date == '-') return time;
+    if (time == '-') return date;
+
+    return '$date • $time';
+  }
+
+  pw.Widget _pdfRow(String label, String value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 10),
+      child: pw.Row(
+        children: [
+          pw.Expanded(
+            flex: 3,
+            child: pw.Text(
+              label,
+              style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+            ),
+          ),
+          pw.Expanded(
+            flex: 5,
+            child: pw.Text(
+              value,
+              textAlign: pw.TextAlign.right,
+              style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<Uint8List> _buildSingleTicketPdf(_PassengerTicketData ticket) async {
+    final pdf = pw.Document();
+
+    final qrSvg = await pw.Barcode.qrCode().toSvg(
+      _buildQrDataForTicket(ticket),
+      width: 140,
+      height: 140,
+    );
+
+    pdf.addPage(
+      pw.Page(
+        margin: const pw.EdgeInsets.all(24),
+        pageFormat: PdfPageFormat.a4,
+        build: (context) {
+          return pw.Container(
+            padding: const pw.EdgeInsets.all(20),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.blue700, width: 1.5),
+              borderRadius: pw.BorderRadius.circular(16),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'TRANSIA',
+                      style: pw.TextStyle(
+                        fontSize: 24,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.blue700,
+                      ),
+                    ),
+                    pw.Container(
+                      padding: const pw.EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: pw.BoxDecoration(
+                        color: PdfColors.blue50,
+                        borderRadius: pw.BorderRadius.circular(20),
+                      ),
+                      child: pw.Text(
+                        '${ticket.ticketIndex}/${ticket.totalTickets}',
+                        style: pw.TextStyle(
+                          fontSize: 14,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.blue700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 18),
+                pw.Center(
+                  child: pw.SizedBox(
+                    width: 140,
+                    height: 140,
+                    child: pw.SvgImage(svg: qrSvg),
+                  ),
+                ),
+                pw.SizedBox(height: 18),
+                _pdfRow('Passager', ticket.passengerName),
+                _pdfRow('Trajet', widget.reservation.trajetLabel),
+                _pdfRow('Date / Heure', _buildDateTimeLine()),
+                _pdfRow('Siège', ticket.seatNumber),
+                _pdfRow('Prix', widget.reservation.prixFormate),
+                _pdfRow('Réservation', widget.reservation.id),
+                _pdfRow('Statut', widget.reservation.statut),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    return pdf.save();
+  }
+
+  Future<Uint8List> _buildSelectedTicketsPdf(
+    List<_PassengerTicketData> selectedTickets,
+  ) async {
+    final pdf = pw.Document();
+
+    for (final ticket in selectedTickets) {
+      final qrSvg = await pw.Barcode.qrCode().toSvg(
         _buildQrDataForTicket(ticket),
         width: 140,
         height: 140,
@@ -236,26 +356,17 @@ class TicketDetailsScreen extends StatelessWidget {
                     child: pw.SizedBox(
                       width: 140,
                       height: 140,
-                      child: pw.SvgImage(svg: qrImage),
+                      child: pw.SvgImage(svg: qrSvg),
                     ),
                   ),
                   pw.SizedBox(height: 18),
                   _pdfRow('Passager', ticket.passengerName),
-                  _pdfRow('Trajet', reservation.trajetLabel),
-                  _pdfRow('Date', reservation.dateDepart),
-                  _pdfRow('Heure', reservation.heureFormatee),
+                  _pdfRow('Trajet', widget.reservation.trajetLabel),
+                  _pdfRow('Date / Heure', _buildDateTimeLine()),
                   _pdfRow('Siège', ticket.seatNumber),
-                  _pdfRow('Prix', reservation.prixFormate),
-                  _pdfRow('Réservation', reservation.id),
-                  _pdfRow('Statut', reservation.statut),
-                  pw.Spacer(),
-                  pw.Text(
-                    'Billet généré pour la réservation ${reservation.id}',
-                    style: const pw.TextStyle(
-                      fontSize: 10,
-                      color: PdfColors.grey700,
-                    ),
-                  ),
+                  _pdfRow('Prix', widget.reservation.prixFormate),
+                  _pdfRow('Réservation', widget.reservation.id),
+                  _pdfRow('Statut', widget.reservation.statut),
                 ],
               ),
             );
@@ -267,43 +378,186 @@ class TicketDetailsScreen extends StatelessWidget {
     return pdf.save();
   }
 
-  pw.Widget _pdfRow(String label, String value) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 10),
-      child: pw.Row(
-        children: [
-          pw.Expanded(
-            flex: 3,
-            child: pw.Text(
-              label,
-              style: pw.TextStyle(
-                fontSize: 12,
-                color: PdfColors.grey700,
+  Future<List<int>?> _showTicketSelectionDialog(
+    List<_PassengerTicketData> tickets,
+  ) async {
+    final selected = List<bool>.filled(tickets.length, true);
+
+    return showDialog<List<int>>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            return AlertDialog(
+              title: Text(
+                tr(
+                  fr: 'Choisir les billets',
+                  en: 'Choose tickets',
+                  es: 'Elegir boletos',
+                  ar: 'اختر التذاكر',
+                ),
               ),
-            ),
-          ),
-          pw.Expanded(
-            flex: 5,
-            child: pw.Text(
-              value,
-              textAlign: pw.TextAlign.right,
-              style: pw.TextStyle(
-                fontSize: 12,
-                fontWeight: pw.FontWeight.bold,
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: List.generate(tickets.length, (index) {
+                      final ticket = tickets[index];
+                      return CheckboxListTile(
+                        value: selected[index],
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(
+                          '${ticket.ticketIndex}/${ticket.totalTickets}',
+                        ),
+                        subtitle: Text(
+                          '${ticket.passengerName} • ${tr(fr: 'Siège', en: 'Seat', es: 'Asiento', ar: 'المقعد')} ${ticket.seatNumber}',
+                        ),
+                        onChanged: (value) {
+                          setLocalState(() {
+                            selected[index] = value ?? false;
+                          });
+                        },
+                      );
+                    }),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
-      ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: Text(
+                    tr(
+                      fr: 'Annuler',
+                      en: 'Cancel',
+                      es: 'Cancelar',
+                      ar: 'إلغاء',
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final indexes = <int>[];
+                    for (int i = 0; i < selected.length; i++) {
+                      if (selected[i]) indexes.add(i);
+                    }
+                    Navigator.pop(dialogContext, indexes);
+                  },
+                  child: Text(
+                    tr(
+                      fr: 'Télécharger',
+                      en: 'Download',
+                      es: 'Descargar',
+                      ar: 'تنزيل',
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
-  Future<void> _downloadPdf(BuildContext context) async {
-    final bytes = await _buildPdf();
+  Future<void> _downloadTickets(BuildContext context) async {
+    try {
+      final tickets = _buildTicketData();
 
-    await Printing.layoutPdf(
-      onLayout: (format) async => bytes,
-      name: 'tickets_${reservation.id}',
+      if (tickets.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              tr(
+                fr: 'Aucun billet disponible.',
+                en: 'No ticket available.',
+                es: 'No hay boletos disponibles.',
+                ar: 'لا توجد تذاكر متاحة.',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+
+      List<_PassengerTicketData> selectedTickets;
+
+      if (tickets.length == 1) {
+        selectedTickets = [tickets.first];
+      } else {
+        final selectedIndexes = await _showTicketSelectionDialog(tickets);
+
+        if (selectedIndexes == null) return;
+
+        if (selectedIndexes.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                tr(
+                  fr: 'Veuillez sélectionner au moins un billet.',
+                  en: 'Please select at least one ticket.',
+                  es: 'Seleccione al menos un boleto.',
+                  ar: 'يرجى اختيار تذكرة واحدة على الأقل.',
+                ),
+              ),
+            ),
+          );
+          return;
+        }
+
+        selectedTickets = selectedIndexes.map((i) => tickets[i]).toList();
+      }
+
+      final bytes = selectedTickets.length == 1
+          ? await _buildSingleTicketPdf(selectedTickets.first)
+          : await _buildSelectedTicketsPdf(selectedTickets);
+
+      final fileName = selectedTickets.length == 1
+          ? 'billet_${widget.reservation.id}_${selectedTickets.first.ticketIndex}.pdf'
+          : 'billets_${widget.reservation.id}.pdf';
+
+      await Printing.sharePdf(bytes: bytes, filename: fileName);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            tr(
+              fr: 'PDF prêt. Choisissez maintenant où l’enregistrer ou le partager.',
+              en: 'PDF ready. Now choose where to save or share it.',
+              es: 'PDF listo. Ahora elija dónde guardarlo o compartirlo.',
+              ar: 'ملف PDF جاهز. اختر الآن مكان حفظه أو مشاركته.',
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            tr(
+              fr: 'Impossible de préparer le PDF des billets.',
+              en: 'Unable to prepare tickets PDF.',
+              es: 'No se pudo preparar el PDF de los boletos.',
+              ar: 'تعذر إعداد ملف PDF للتذاكر.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _shareSingleTicket(
+    BuildContext context,
+    _PassengerTicketData ticket,
+  ) async {
+    final bytes = await _buildSingleTicketPdf(ticket);
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: 'billet_${widget.reservation.id}_${ticket.ticketIndex}.pdf',
     );
   }
 
@@ -326,10 +580,7 @@ class TicketDetailsScreen extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: TextStyle(
-                fontSize: 14,
-                color: mutedColor,
-              ),
+              style: TextStyle(fontSize: 14, color: mutedColor),
             ),
           ),
           Expanded(
@@ -339,9 +590,7 @@ class TicketDetailsScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: highlight
-                    ? const Color(0xFF3158F5)
-                    : normalTextColor,
+                color: highlight ? const Color(0xFF3158F5) : normalTextColor,
               ),
             ),
           ),
@@ -350,10 +599,7 @@ class TicketDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTicketCard(
-    BuildContext context,
-    _PassengerTicketData ticket,
-  ) {
+  Widget _buildTicketCard(BuildContext context, _PassengerTicketData ticket) {
     final theme = Theme.of(context);
     final titleColor =
         theme.textTheme.titleLarge?.color ?? const Color(0xFF374151);
@@ -390,13 +636,19 @@ class TicketDetailsScreen extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              const Icon(
-                Icons.confirmation_number_rounded,
-                color: Color(0xFF3158F5),
+              IconButton(
+                onPressed: () => _shareSingleTicket(context, ticket),
+                icon: const Icon(Icons.share_rounded, color: Color(0xFF3158F5)),
+                tooltip: tr(
+                  fr: 'Partager ce billet',
+                  en: 'Share this ticket',
+                  es: 'Compartir este boleto',
+                  ar: 'مشاركة هذه التذكرة',
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           Center(
             child: Container(
               padding: const EdgeInsets.all(12),
@@ -427,17 +679,17 @@ class TicketDetailsScreen extends StatelessWidget {
           _buildInfoRow(
             context,
             tr(fr: 'Trajet', en: 'Trip', es: 'Trayecto', ar: 'الرحلة'),
-            reservation.trajetLabel,
+            widget.reservation.trajetLabel,
           ),
           _buildInfoRow(
             context,
-            tr(fr: 'Date', en: 'Date', es: 'Fecha', ar: 'التاريخ'),
-            reservation.dateDepart,
-          ),
-          _buildInfoRow(
-            context,
-            tr(fr: 'Heure', en: 'Time', es: 'Hora', ar: 'الوقت'),
-            reservation.heureFormatee,
+            tr(
+              fr: 'Date / Heure',
+              en: 'Date / Time',
+              es: 'Fecha / Hora',
+              ar: 'التاريخ / الوقت',
+            ),
+            _buildDateTimeLine(),
           ),
           _buildInfoRow(
             context,
@@ -447,7 +699,7 @@ class TicketDetailsScreen extends StatelessWidget {
           _buildInfoRow(
             context,
             tr(fr: 'Prix', en: 'Price', es: 'Precio', ar: 'السعر'),
-            reservation.prixFormate,
+            widget.reservation.prixFormate,
             highlight: true,
           ),
           _buildInfoRow(
@@ -458,7 +710,7 @@ class TicketDetailsScreen extends StatelessWidget {
               es: 'ID reserva',
               ar: 'معرف الحجز',
             ),
-            reservation.id,
+            widget.reservation.id,
           ),
         ],
       ),
@@ -481,18 +733,6 @@ class TicketDetailsScreen extends StatelessWidget {
             ar: 'تذاكري',
           ),
         ),
-        actions: [
-          IconButton(
-            onPressed: () => _downloadPdf(context),
-            icon: const Icon(Icons.picture_as_pdf_rounded),
-            tooltip: tr(
-              fr: 'Télécharger en PDF',
-              en: 'Download PDF',
-              es: 'Descargar PDF',
-              ar: 'تنزيل PDF',
-            ),
-          ),
-        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
@@ -505,18 +745,15 @@ class TicketDetailsScreen extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(
-                  Icons.picture_as_pdf_rounded,
-                  color: Color(0xFF3158F5),
-                ),
+                const Icon(Icons.download_rounded, color: Color(0xFF3158F5)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     tr(
-                      fr: 'Téléchargez tous les billets de cette réservation en PDF.',
-                      en: 'Download all tickets for this booking as PDF.',
-                      es: 'Descargue todos los boletos de esta reserva en PDF.',
-                      ar: 'قم بتنزيل جميع تذاكر هذا الحجز بصيغة PDF.',
+                      fr: 'Téléchargez les billets de cette réservation en PDF.',
+                      en: 'Download tickets for this booking as PDF.',
+                      es: 'Descargue los boletos de esta reserva en PDF.',
+                      ar: 'قم بتنزيل تذاكر هذا الحجز بصيغة PDF.',
                     ),
                     style: TextStyle(
                       fontSize: 14,
@@ -526,13 +763,13 @@ class TicketDetailsScreen extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: () => _downloadPdf(context),
+                  onPressed: () => _downloadTickets(context),
                   child: Text(
                     tr(
-                      fr: 'PDF',
-                      en: 'PDF',
-                      es: 'PDF',
-                      ar: 'PDF',
+                      fr: 'Télécharger',
+                      en: 'Download',
+                      es: 'Descargar',
+                      ar: 'تنزيل',
                     ),
                   ),
                 ),
