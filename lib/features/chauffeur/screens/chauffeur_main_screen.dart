@@ -1,104 +1,100 @@
 import 'package:flutter/material.dart';
+import 'package:transia_mobile/features/chauffeur/screens/chauffeur_history_screen.dart';
 import 'package:transia_mobile/features/chauffeur/screens/chauffeur_home_screen.dart';
-import 'package:transia_mobile/features/chauffeur/screens/chauffeur_profile_screen.dart';
+import 'package:transia_mobile/features/chauffeur/screens/chauffeur_scan_trip_list_screen.dart';
+import 'package:transia_mobile/features/client/screens/profile_screen.dart';
 
 class ChauffeurMainScreen extends StatefulWidget {
-  const ChauffeurMainScreen({super.key});
+  final int initialIndex;
+
+  const ChauffeurMainScreen({
+    super.key,
+    this.initialIndex = 0,
+  });
 
   @override
   State<ChauffeurMainScreen> createState() => _ChauffeurMainScreenState();
 }
 
 class _ChauffeurMainScreenState extends State<ChauffeurMainScreen> {
-  int currentIndex = 0;
+  late int selectedIndex;
 
-  final List<Widget> screens = const [
-    ChauffeurHomeScreen(),
-    ChauffeurScanPlaceholderScreen(),
-    ChauffeurProfileScreen(),
-  ];
+  late final List<Widget> pages;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: screens[currentIndex],
-      bottomNavigationBar: NavigationBar(
-        height: 74,
-        selectedIndex: currentIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            currentIndex = index;
-          });
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Accueil',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.qr_code_scanner_outlined),
-            selectedIcon: Icon(Icons.qr_code_scanner_rounded),
-            label: 'Scan',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Profil',
-          ),
-        ],
-      ),
-    );
+  void initState() {
+    super.initState();
+    selectedIndex = widget.initialIndex;
+    pages = const [
+      ChauffeurHomeScreen(),
+      ChauffeurScanTripListScreen(),
+      ChauffeurHistoryScreen(),
+      ProfileScreen(),
+    ];
   }
-}
-
-class ChauffeurScanPlaceholderScreen extends StatelessWidget {
-  const ChauffeurScanPlaceholderScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FF),
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
+      body: IndexedStack(
+        index: selectedIndex,
+        children: pages,
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          height: 70,
+          decoration: BoxDecoration(
+            color: theme.bottomNavigationBarTheme.backgroundColor ??
+                theme.cardColor,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.22 : 0.07),
+                blurRadius: 14,
+                offset: const Offset(0, -3),
               ),
-              child: const Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.qr_code_scanner_rounded,
-                    size: 60,
-                    color: Color(0xFF3158F5),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'Scan QR',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF374151),
-                    ),
-                  ),
-                  SizedBox(height: 10),
-                  Text(
-                    'Le scan des billets sera branché juste après.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF6B7280),
-                    ),
-                  ),
-                ],
+            ],
+          ),
+          child: BottomNavigationBar(
+            currentIndex: selectedIndex,
+            onTap: (index) {
+              setState(() {
+                selectedIndex = index;
+              });
+            },
+            backgroundColor:
+                theme.bottomNavigationBarTheme.backgroundColor ??
+                    theme.cardColor,
+            elevation: 0,
+            type: BottomNavigationBarType.fixed,
+            selectedItemColor: const Color(0xFF3158F5),
+            unselectedItemColor:
+                theme.bottomNavigationBarTheme.unselectedItemColor ??
+                    theme.disabledColor,
+            selectedFontSize: 11,
+            unselectedFontSize: 11,
+            iconSize: 24,
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.home_rounded),
+                label: 'Accueil',
               ),
-            ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.qr_code_scanner_rounded),
+                label: 'Scan',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.history_rounded),
+                label: 'Historique',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person_outline_rounded),
+                label: 'Profil',
+              ),
+            ],
           ),
         ),
       ),

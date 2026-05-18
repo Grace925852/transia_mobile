@@ -23,9 +23,6 @@ class _ChauffeurLoginScreenState extends State<ChauffeurLoginScreen> {
   bool isLoading = false;
 
   final Color primaryBlue = const Color(0xFF3158F5);
-  final Color backgroundColor = const Color(0xFFF5F7FF);
-  final Color textColor = const Color(0xFF374151);
-  final Color hintColor = const Color(0xFF9CA3AF);
 
   @override
   void dispose() {
@@ -41,11 +38,12 @@ class _ChauffeurLoginScreenState extends State<ChauffeurLoginScreen> {
       (role) => role == 'CHAUFFEUR' || role == 'ROLE_CHAUFFEUR',
     );
 
-    /// verrou temporaire pendant les tests
-    /// adapte cette liste selon tes vrais comptes chauffeur
-    const allowedChauffeurUsernames = ['92000000'];
+    const allowedChauffeurUsernames = [
+      '92000000',
+      '90005566',
+    ];
 
-    if (!allowedChauffeurUsernames.contains(username)) {
+    if (!allowedChauffeurUsernames.contains(username.trim())) {
       return false;
     }
 
@@ -85,6 +83,10 @@ class _ChauffeurLoginScreenState extends State<ChauffeurLoginScreen> {
         return;
       }
 
+      // IMPORTANT :
+      // On ne réécrit pas la session ici.
+      // AuthService.login() l’a déjà enregistrée avec numericUserId.
+
       if (!mounted) return;
       context.go(AppRoutes.chauffeur);
     } catch (e) {
@@ -109,11 +111,20 @@ class _ChauffeurLoginScreenState extends State<ChauffeurLoginScreen> {
   }
 
   Widget _buildInputField({
+    required BuildContext context,
     required String label,
     required TextEditingController controller,
     required IconData icon,
     bool isPassword = false,
   }) {
+    final theme = Theme.of(context);
+    final textColor =
+        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
+    final hintColor =
+        theme.textTheme.bodyMedium?.color ?? const Color(0xFF9CA3AF);
+    final cardColor = theme.cardColor;
+    final isDark = theme.brightness == Brightness.dark;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -128,10 +139,12 @@ class _ChauffeurLoginScreenState extends State<ChauffeurLoginScreen> {
         const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cardColor,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: const Color(0xFFE5E7EB),
+              color: isDark
+                  ? const Color(0xFF334155)
+                  : const Color(0xFFE5E7EB),
             ),
           ),
           child: TextField(
@@ -139,6 +152,7 @@ class _ChauffeurLoginScreenState extends State<ChauffeurLoginScreen> {
             obscureText: isPassword ? obscurePassword : false,
             keyboardType:
                 isPassword ? TextInputType.text : TextInputType.phone,
+            style: TextStyle(color: textColor),
             decoration: InputDecoration(
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
@@ -178,8 +192,42 @@ class _ChauffeurLoginScreenState extends State<ChauffeurLoginScreen> {
     );
   }
 
+  Widget _buildLogo() {
+    return Container(
+      height: 170,
+      width: 170,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(32),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: Transform.scale(
+          scale: 1.1,
+          child: Image.asset(
+            'assets/images/logo.png',
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) {
+              return Icon(
+                Icons.directions_bus_rounded,
+                size: 80,
+                color: primaryBlue,
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final backgroundColor = theme.scaffoldBackgroundColor;
+    final cardColor = theme.cardColor;
+    final textColor =
+        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
+
     return Scaffold(
       backgroundColor: primaryBlue,
       body: SafeArea(
@@ -195,19 +243,7 @@ class _ChauffeurLoginScreenState extends State<ChauffeurLoginScreen> {
                     Center(
                       child: Column(
                         children: [
-                          Container(
-                            height: 140,
-                            width: 140,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(32),
-                            ),
-                            child: Icon(
-                              Icons.directions_bus_rounded,
-                              size: 62,
-                              color: primaryBlue,
-                            ),
-                          ),
+                          _buildLogo(),
                           const SizedBox(height: 24),
                           const Text(
                             'Transia',
@@ -250,7 +286,7 @@ class _ChauffeurLoginScreenState extends State<ChauffeurLoginScreen> {
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: cardColor,
                         borderRadius: BorderRadius.circular(28),
                       ),
                       child: Column(
@@ -266,12 +302,14 @@ class _ChauffeurLoginScreenState extends State<ChauffeurLoginScreen> {
                           ),
                           const SizedBox(height: 24),
                           _buildInputField(
+                            context: context,
                             label: 'Numéro de téléphone',
                             controller: phoneController,
                             icon: Icons.phone_outlined,
                           ),
                           const SizedBox(height: 18),
                           _buildInputField(
+                            context: context,
                             label: 'Mot de passe',
                             controller: passwordController,
                             icon: Icons.lock_outline_rounded,

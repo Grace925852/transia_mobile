@@ -1,8 +1,10 @@
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/features/auth/screens/login_screen.dart';
+import 'package:transia_mobile/features/chauffeur/models/chauffeur_passenger_model.dart';
 import 'package:transia_mobile/features/chauffeur/models/chauffeur_trip_model.dart';
 import 'package:transia_mobile/features/chauffeur/screens/chauffeur_login_screen.dart';
 import 'package:transia_mobile/features/chauffeur/screens/chauffeur_main_screen.dart';
+import 'package:transia_mobile/features/chauffeur/screens/chauffeur_scan_screen.dart';
 import 'package:transia_mobile/features/chauffeur/screens/chauffeur_trip_passengers_screen.dart';
 import 'package:transia_mobile/features/client/models/reservation_model.dart';
 import 'package:transia_mobile/features/client/models/trajet_model.dart';
@@ -16,6 +18,7 @@ import 'package:transia_mobile/features/client/screens/ticket_details_screen.dar
 import 'package:transia_mobile/features/client/screens/tracking_detail_screen.dart';
 import 'package:transia_mobile/features/client/screens/trip_detail_screen.dart';
 import 'package:transia_mobile/features/client/screens/trip_list_screen.dart';
+import 'package:transia_mobile/features/chauffeur/screens/chauffeur_report_problem_screen.dart';
 
 class AppRoutes {
   static const String login = '/login';
@@ -24,6 +27,8 @@ class AppRoutes {
   static const String chauffeurLogin = '/chauffeur-login';
   static const String chauffeur = '/chauffeur';
   static const String chauffeurPassengers = '/chauffeur/passagers';
+  static const String chauffeurScan = '/chauffeur/scan';
+  static const String chauffeurReportProblem = '/chauffeur/report-problem';
 
   static const String tripList = '/trip-list';
   static const String tripDetail = '/trip-detail';
@@ -39,11 +44,10 @@ class AppRoutes {
   static const String rating = '/rating';
 }
 
-const bool launchClientOnly = true;
+const bool launchClientOnly = false;
 
 final GoRouter appRouter = GoRouter(
-  initialLocation:
-      launchClientOnly ? AppRoutes.login : AppRoutes.chauffeurLogin,
+  initialLocation: launchClientOnly ? AppRoutes.login : AppRoutes.chauffeurLogin,
   routes: [
     GoRoute(
       path: AppRoutes.login,
@@ -68,10 +72,19 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
     GoRoute(
+      path: AppRoutes.chauffeurScan,
+      builder: (context, state) {
+        final data = state.extra as Map<String, dynamic>;
+        return ChauffeurScanScreen(
+          trip: data['trip'] as ChauffeurTripModel,
+          passengers: data['passengers'] as List<ChauffeurPassengerModel>,
+        );
+      },
+    ),
+    GoRoute(
       path: AppRoutes.tripList,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>;
-
         return TripListScreen(
           trajets: data['trajets'],
           villeDepart: data['villeDepart'],
@@ -91,7 +104,6 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.bookingSummary,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>;
-
         return BookingSummaryScreen(
           trajet: data['trajet'] as TrajetModel,
           nombreSieges: data['nombreSieges'] as int,
@@ -138,6 +150,12 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.rating,
       builder: (context, state) => RatingScreen(
         reservation: state.extra as ReservationModel,
+      ),
+    ),
+    GoRoute(
+      path: AppRoutes.chauffeurReportProblem,
+      builder: (context, state) => ChauffeurReportProblemScreen(
+        trip: state.extra as ChauffeurTripModel,
       ),
     ),
   ],

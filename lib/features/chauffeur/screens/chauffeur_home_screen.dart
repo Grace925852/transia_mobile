@@ -21,8 +21,12 @@ class _ChauffeurHomeScreenState extends State<ChauffeurHomeScreen> {
   bool isLoading = true;
   String chauffeurName = 'Chauffeur';
   String chauffeurPhone = '';
-  List<ChauffeurTripModel> trips = [];
+
+  List<ChauffeurTripModel> allTrips = [];
+  List<ChauffeurTripModel> upcomingTrips = [];
+
   Map<String, int> passengerCounts = {};
+  Map<String, int> presentCounts = {};
 
   @override
   void initState() {
@@ -31,6 +35,26 @@ class _ChauffeurHomeScreenState extends State<ChauffeurHomeScreen> {
     apiClient = ApiClient(secureStorageService);
     chauffeurService = ChauffeurService(apiClient: apiClient);
     chargerDonnees();
+  }
+
+  DateTime? _tripDateTime(ChauffeurTripModel trip) {
+    final date = trip.dateDepart.trim();
+    final time = trip.heureFormatee.trim();
+
+    if (date.isEmpty) return null;
+
+    try {
+      final safeTime = time.isEmpty ? '00:00:00' : (time.length == 5 ? '$time:00' : time);
+      return DateTime.parse('${date}T$safeTime');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _isUpcomingTrip(ChauffeurTripModel trip) {
+    final tripDate = _tripDateTime(trip);
+    if (tripDate == null) return true;
+    return !tripDate.isBefore(DateTime.now());
   }
 
   Future<void> chargerDonnees() async {
@@ -43,19 +67,34 @@ class _ChauffeurHomeScreenState extends State<ChauffeurHomeScreen> {
       final phone = await secureStorageService.getUsername();
       final result = await chauffeurService.getTrips();
 
+      result.sort((a, b) {
+        final aDate = _tripDateTime(a) ?? DateTime(2100);
+        final bDate = _tripDateTime(b) ?? DateTime(2100);
+        return aDate.compareTo(bDate);
+      });
+
+      final filteredUpcoming = result.where(_isUpcomingTrip).toList();
+
       final Map<String, int> counts = {};
-      for (final trip in result) {
+      final Map<String, int> presents = {};
+
+      for (final trip in filteredUpcoming) {
         counts[trip.id] = await chauffeurService.getPassengerCountForTrip(trip.id);
+        presents[trip.id] = await chauffeurService.getPresentCountForTrip(trip.id);
       }
 
       if (!mounted) return;
 
       setState(() {
-        chauffeurName =
-            (name != null && name.trim().isNotEmpty) ? name : 'Chauffeur';
-        chauffeurPhone = phone ?? '';
-        trips = result;
+        final cleanName = name?.trim() ?? '';
+        final cleanPhone = phone?.trim() ?? '';
+
+        chauffeurName = cleanName.isNotEmpty ? cleanName : (cleanPhone.isNotEmpty ? cleanPhone : 'Chauffeur');
+        chauffeurPhone = cleanPhone;
+        allTrips = result;
+        upcomingTrips = filteredUpcoming;
         passengerCounts = counts;
+        presentCounts = presents;
         isLoading = false;
       });
     } catch (e) {
@@ -67,27 +106,33 @@ class _ChauffeurHomeScreenState extends State<ChauffeurHomeScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            e.toString().replaceAll('Exception: ', ''),
-          ),
+          content: Text(e.toString().replaceAll('Exception: ', '')),
         ),
       );
     }
   }
 
   String get initiales {
-    final parts = chauffeurName.trim().split(RegExp(r'\s+'));
+    final clean = chauffeurName.trim();
+    if (clean.isEmpty || clean == 'Chauffeur') return 'CH';
+
+    final parts = clean.split(RegExp(r'\s+'));
     if (parts.isEmpty) return 'CH';
-    if (parts.length == 1) return parts.first[0].toUpperCase();
+    if (parts.length == 1) {
+      return parts.first.isNotEmpty ? parts.first[0].toUpperCase() : 'CH';
+    }
     return (parts.first[0] + parts[1][0]).toUpperCase();
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentTrip = trips.isNotEmpty ? trips.first : null;
+    final theme = Theme.of(context);
+    final nextTrip = upcomingTrips.isNotEmpty ? upcomingTrips.first : null;
+    final nextExpected = nextTrip == null ? 0 : (passengerCounts[nextTrip.id] ?? 0);
+    final nextPresent = nextTrip == null ? 0 : (presentCounts[nextTrip.id] ?? 0);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FF),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: chargerDonnees,
@@ -123,14 +168,16 @@ class _ChauffeurHomeScreenState extends State<ChauffeurHomeScreen> {
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            chauffeurPhone,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.white70,
+                          if (chauffeurPhone.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              chauffeurPhone,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.white70,
+                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -162,17 +209,22 @@ class _ChauffeurHomeScreenState extends State<ChauffeurHomeScreen> {
                   children: [
                     Expanded(
                       child: _StatCard(
-                        value: '${trips.length}',
-                        label: 'Trajets',
+                        value: '${upcomingTrips.length}',
+                        label: 'À venir',
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: _StatCard(
-                        value: currentTrip == null
-                            ? '0'
-                            : '${passengerCounts[currentTrip.id] ?? 0}',
-                        label: 'Passagers du jour',
+                        value: '$nextExpected',
+                        label: 'Clients attendus',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _StatCard(
+                        value: '$nextPresent',
+                        label: 'Présents',
                       ),
                     ),
                   ],
@@ -182,24 +234,24 @@ class _ChauffeurHomeScreenState extends State<ChauffeurHomeScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: theme.cardColor,
                     borderRadius: BorderRadius.circular(24),
                   ),
-                  child: currentTrip == null
-                      ? const Column(
+                  child: nextTrip == null
+                      ? Column(
                           children: [
                             Icon(
                               Icons.directions_bus_outlined,
                               size: 52,
-                              color: Color(0xFF9CA3AF),
+                              color: theme.disabledColor,
                             ),
-                            SizedBox(height: 12),
+                            const SizedBox(height: 12),
                             Text(
-                              'Aucun trajet disponible',
+                              'Aucun trajet à venir',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF374151),
+                                color: theme.textTheme.titleLarge?.color,
                               ),
                             ),
                           ],
@@ -207,100 +259,132 @@ class _ChauffeurHomeScreenState extends State<ChauffeurHomeScreen> {
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Trajet en vedette',
+                            Text(
+                              'Prochain trajet',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF374151),
+                                color: theme.textTheme.titleLarge?.color,
                               ),
                             ),
                             const SizedBox(height: 16),
-                            _InfoRow(
-                              label: 'Trajet',
-                              value: currentTrip.trajetLabel,
-                            ),
-                            _InfoRow(
-                              label: 'Date',
-                              value: currentTrip.dateDepart.isEmpty
-                                  ? '-'
-                                  : currentTrip.dateDepart,
-                            ),
-                            _InfoRow(
-                              label: 'Heure',
-                              value: currentTrip.heureFormatee.isEmpty
-                                  ? '-'
-                                  : currentTrip.heureFormatee,
-                            ),
+                            _InfoRow(label: 'Trajet', value: nextTrip.trajetLabel),
+                            _InfoRow(label: 'Date', value: nextTrip.dateDepart.isEmpty ? '-' : nextTrip.dateDepart),
+                            _InfoRow(label: 'Heure', value: nextTrip.heureFormatee.isEmpty ? '-' : nextTrip.heureFormatee),
                             _InfoRow(
                               label: 'Véhicule',
-                              value: currentTrip.vehiculeImmatriculation.isEmpty
-                                  ? '-'
-                                  : currentTrip.vehiculeImmatriculation,
+                              value: nextTrip.vehiculeImmatriculation.isEmpty ? '-' : nextTrip.vehiculeImmatriculation,
                             ),
+                            _InfoRow(label: 'Clients attendus', value: '$nextExpected'),
+                            _InfoRow(label: 'Présents', value: '$nextPresent'),
                             _InfoRow(
-                              label: 'Passagers',
-                              value:
-                                  '${passengerCounts[currentTrip.id] ?? 0}',
+                              label: 'Restants',
+                              value: '${(nextExpected - nextPresent).clamp(0, 9999)}',
                             ),
                             const SizedBox(height: 18),
-                            SizedBox(
-                              width: double.infinity,
-                              height: 52,
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  context.push(
-                                    AppRoutes.chauffeurPassengers,
-                                    extra: currentTrip,
-                                  );
-                                },
-                                child: const Text('Voir les passagers'),
-                              ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 52,
+                                    child: ElevatedButton(
+                                      onPressed: () async {
+                                        final result = await context.push(
+                                          AppRoutes.chauffeurPassengers,
+                                          extra: nextTrip,
+                                        );
+
+                                        if (!mounted) return;
+
+                                        if (result == true) {
+                                          await chargerDonnees();
+                                        }
+                                      },
+                                      child: const Text('Voir le trajet'),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 52,
+                                    child: OutlinedButton(
+                                      onPressed: () async {
+                                        final passengers =
+                                            await chauffeurService.getPaidPassengersForTrip(nextTrip.id);
+
+                                        if (!context.mounted) return;
+
+                                        final result = await context.push(
+                                          AppRoutes.chauffeurScan,
+                                          extra: {
+                                            'trip': nextTrip,
+                                            'passengers': passengers,
+                                          },
+                                        );
+
+                                        if (!mounted) return;
+
+                                        if (result is String && result.isNotEmpty) {
+                                          await chargerDonnees();
+                                        }
+                                      },
+                                      child: const Text('Scanner'),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                 ),
                 const SizedBox(height: 18),
-                const Text(
-                  'Tous les trajets',
+                Text(
+                  'Trajets à venir',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF374151),
+                    color: theme.textTheme.titleLarge?.color,
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (trips.isEmpty)
+                if (upcomingTrips.isEmpty)
                   Container(
                     padding: const EdgeInsets.all(22),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: theme.cardColor,
                       borderRadius: BorderRadius.circular(24),
                     ),
-                    child: const Text(
-                      'Aucun trajet trouvé.',
+                    child: Text(
+                      'Aucun trajet à venir.',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Color(0xFF6B7280),
+                        color: theme.textTheme.bodyMedium?.color,
                       ),
                     ),
                   )
                 else
-                  ...trips.map(
+                  ...upcomingTrips.map(
                     (trip) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(20),
-                        onTap: () {
-                          context.push(
+                        onTap: () async {
+                          final result = await context.push(
                             AppRoutes.chauffeurPassengers,
                             extra: trip,
                           );
+
+                          if (!mounted) return;
+
+                          if (result == true) {
+                            await chargerDonnees();
+                          }
                         },
                         child: Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: theme.cardColor,
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Column(
@@ -308,38 +392,36 @@ class _ChauffeurHomeScreenState extends State<ChauffeurHomeScreen> {
                             children: [
                               Text(
                                 trip.trajetLabel,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 17,
                                   fontWeight: FontWeight.w700,
-                                  color: Color(0xFF374151),
+                                  color: theme.textTheme.titleMedium?.color,
                                 ),
                               ),
                               const SizedBox(height: 10),
                               _MiniInfo(
                                 icon: Icons.calendar_today_outlined,
-                                text: trip.dateDepart.isEmpty
-                                    ? '-'
-                                    : trip.dateDepart,
+                                text: trip.dateDepart.isEmpty ? '-' : trip.dateDepart,
                               ),
                               const SizedBox(height: 6),
                               _MiniInfo(
                                 icon: Icons.access_time_outlined,
-                                text: trip.heureFormatee.isEmpty
-                                    ? '-'
-                                    : trip.heureFormatee,
+                                text: trip.heureFormatee.isEmpty ? '-' : trip.heureFormatee,
                               ),
                               const SizedBox(height: 6),
                               _MiniInfo(
                                 icon: Icons.directions_bus_outlined,
-                                text: trip.vehiculeImmatriculation.isEmpty
-                                    ? '-'
-                                    : trip.vehiculeImmatriculation,
+                                text: trip.vehiculeImmatriculation.isEmpty ? '-' : trip.vehiculeImmatriculation,
                               ),
                               const SizedBox(height: 6),
                               _MiniInfo(
-                                icon: Icons.group_outlined,
-                                text:
-                                    '${passengerCounts[trip.id] ?? 0} passagers',
+                                icon: Icons.groups_outlined,
+                                text: '${passengerCounts[trip.id] ?? 0} clients attendus',
+                              ),
+                              const SizedBox(height: 6),
+                              _MiniInfo(
+                                icon: Icons.verified_user_outlined,
+                                text: '${presentCounts[trip.id] ?? 0} présents',
                               ),
                             ],
                           ),
@@ -367,10 +449,12 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
@@ -386,9 +470,10 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             label,
-            style: const TextStyle(
+            textAlign: TextAlign.center,
+            style: TextStyle(
               fontSize: 13,
-              color: Color(0xFF6B7280),
+              color: theme.textTheme.bodyMedium?.color,
             ),
           ),
         ],
@@ -408,6 +493,8 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
@@ -415,9 +502,9 @@ class _InfoRow extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: Color(0xFF6B7280),
+                color: theme.textTheme.bodyMedium?.color,
               ),
             ),
           ),
@@ -425,10 +512,10 @@ class _InfoRow extends StatelessWidget {
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF374151),
+                color: theme.textTheme.bodyLarge?.color,
               ),
             ),
           ),
@@ -449,20 +536,22 @@ class _MiniInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Row(
       children: [
         Icon(
           icon,
           size: 16,
-          color: const Color(0xFF9CA3AF),
+          color: theme.disabledColor,
         ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
-              color: Color(0xFF6B7280),
+              color: theme.textTheme.bodyMedium?.color,
             ),
           ),
         ),
