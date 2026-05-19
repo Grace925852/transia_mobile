@@ -87,7 +87,6 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-
       setState(() {
         isLoading = false;
         errorMessage = e.toString().replaceAll('Exception: ', '');
@@ -106,16 +105,167 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
     return dt.isAfter(DateTime.now());
   }
 
+  bool _canCancelReservation(ReservationModel reservation) {
+    final status = reservation.statut.trim().toUpperCase();
+    return status == 'EN_ATTENTE' && !reservation.isCancelled;
+  }
+
   List<ReservationModel> get unpaidReservations => reservations
-      .where((r) => !_isPaid(r) && _isUpcomingReservation(r))
+      .where(
+        (r) =>
+            !_isPaid(r) &&
+            _isUpcomingReservation(r) &&
+            !r.isClosedForReservations,
+      )
       .toList();
 
   List<ReservationModel> get paidReservations => reservations
-      .where((r) => _isPaid(r) && _isUpcomingReservation(r))
+      .where(
+        (r) =>
+            _isPaid(r) &&
+            _isUpcomingReservation(r) &&
+            !r.isClosedForReservations,
+      )
       .toList();
 
   List<ReservationModel> get displayedReservations =>
       selectedTab == 0 ? unpaidReservations : paidReservations;
+
+  Future<void> _cancelReservation(ReservationModel reservation) async {
+    final status = reservation.statut.trim().toUpperCase();
+
+    if (status != 'EN_ATTENTE') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            tr(
+              fr: 'Seules les réservations en attente peuvent être annulées.',
+              en: 'Only pending bookings can be cancelled.',
+              es: 'Solo las reservas pendientes pueden cancelarse.',
+              ar: 'يمكن إلغاء الحجوزات المعلقة فقط.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          tr(
+            fr: 'Annuler la réservation',
+            en: 'Cancel booking',
+            es: 'Cancelar reserva',
+            ar: 'إلغاء الحجز',
+          ),
+        ),
+        content: Text(
+          tr(
+            fr: 'Voulez-vous vraiment annuler cette réservation ? Les places seront libérées.',
+            en: 'Do you really want to cancel this booking? The seats will be released.',
+            es: '¿Desea realmente cancelar esta reserva? Los asientos serán liberados.',
+            ar: 'هل تريد فعلاً إلغاء هذا الحجز؟ سيتم تحرير المقاعد.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(tr(fr: 'Non', en: 'No', es: 'No', ar: 'لا')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              tr(
+                fr: 'Oui, annuler',
+                en: 'Yes, cancel',
+                es: 'Sí, cancelar',
+                ar: 'نعم، إلغاء',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await reservationService.cancelReservation(reservation.id);
+      await paymentStatusService.removePaidReservationId(reservation.id);
+      await chargerReservations();
+
+      final cancelledReservation = reservations.cast<ReservationModel?>().firstWhere(
+            (r) => r?.id == reservation.id,
+            orElse: () => null,
+          );
+
+      final reallyCancelled =
+          cancelledReservation == null || cancelledReservation.isCancelled;
+
+      if (!mounted) return;
+
+      if (reallyCancelled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              tr(
+                fr: 'Réservation annulée avec succès.',
+                en: 'Booking cancelled successfully.',
+                es: 'Reserva cancelada con éxito.',
+                ar: 'تم إلغاء الحجز بنجاح.',
+              ),
+            ),
+          ),
+        );
+      }
+    } catch (_) {
+      await paymentStatusService.removePaidReservationId(reservation.id);
+      await chargerReservations();
+
+      final cancelledReservation = reservations.cast<ReservationModel?>().firstWhere(
+            (r) => r?.id == reservation.id,
+            orElse: () => null,
+          );
+
+      final reallyCancelled =
+          cancelledReservation == null || cancelledReservation.isCancelled;
+
+      if (!mounted) return;
+
+      if (reallyCancelled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              tr(
+                fr: 'Réservation annulée avec succès.',
+                en: 'Booking cancelled successfully.',
+                es: 'Reserva cancelada con éxito.',
+                ar: 'تم إلغاء الحجز بنجاح.',
+              ),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _openRefundRequest(ReservationModel reservation) {
+    if (!reservation.isRefundEligible) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(reservation.refundEligibilityMessage),
+        ),
+      );
+      return;
+    }
+
+    context.push(
+      AppRoutes.refundRequest,
+      extra: reservation,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -172,9 +322,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
               if (isLoading)
                 const Padding(
                   padding: EdgeInsets.only(top: 80),
-                  child: Center(
-                    child: CircularProgressIndicator(),
-                  ),
+                  child: Center(child: CircularProgressIndicator()),
                 )
               else if (errorMessage.isNotEmpty)
                 _ErrorCard(
@@ -216,11 +364,27 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                     child: _ReservationCard(
                       reservation: reservation,
                       isPaid: _isPaid(reservation),
+                      canCancel: _canCancelReservation(reservation),
+                      canRefund: _isPaid(reservation) &&
+                          reservation.isRefundEligible &&
+                          !reservation.isRefunded,
                       payLabel: tr(
                         fr: 'Payer',
                         en: 'Pay',
                         es: 'Pagar',
                         ar: 'ادفع',
+                      ),
+                      cancelLabel: tr(
+                        fr: 'Annuler',
+                        en: 'Cancel',
+                        es: 'Cancelar',
+                        ar: 'إلغاء',
+                      ),
+                      refundLabel: tr(
+                        fr: 'Remboursement',
+                        en: 'Refund',
+                        es: 'Reembolso',
+                        ar: 'استرداد',
                       ),
                       ticketLabel: tr(
                         fr: 'Voir billet',
@@ -284,12 +448,14 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                         if (!mounted) return;
                         await chargerReservations();
                       },
+                      onCancel: () => _cancelReservation(reservation),
                       onViewTicket: () {
                         context.push(
                           AppRoutes.ticketDetails,
                           extra: reservation,
                         );
                       },
+                      onRefund: () => _openRefundRequest(reservation),
                     ),
                   ),
                 ),
@@ -424,7 +590,11 @@ class _SmallTab extends StatelessWidget {
 class _ReservationCard extends StatelessWidget {
   final ReservationModel reservation;
   final bool isPaid;
+  final bool canCancel;
+  final bool canRefund;
   final String payLabel;
+  final String cancelLabel;
+  final String refundLabel;
   final String ticketLabel;
   final String dateLabel;
   final String timeLabel;
@@ -435,12 +605,18 @@ class _ReservationCard extends StatelessWidget {
   final String waitingText;
   final String paidText;
   final VoidCallback onPay;
+  final VoidCallback onCancel;
   final VoidCallback onViewTicket;
+  final VoidCallback onRefund;
 
   const _ReservationCard({
     required this.reservation,
     required this.isPaid,
+    required this.canCancel,
+    required this.canRefund,
     required this.payLabel,
+    required this.cancelLabel,
+    required this.refundLabel,
     required this.ticketLabel,
     required this.dateLabel,
     required this.timeLabel,
@@ -451,7 +627,9 @@ class _ReservationCard extends StatelessWidget {
     required this.waitingText,
     required this.paidText,
     required this.onPay,
+    required this.onCancel,
     required this.onViewTicket,
+    required this.onRefund,
   });
 
   @override
@@ -481,8 +659,14 @@ class _ReservationCard extends StatelessWidget {
           const SizedBox(height: 14),
           _ReservationRow(label: dateLabel, value: reservation.dateDepart),
           _ReservationRow(label: timeLabel, value: reservation.heureFormatee),
-          _ReservationRow(label: vehicleLabel, value: reservation.vehiculeImmatriculation),
-          _ReservationRow(label: responsibleLabel, value: reservation.clientNom),
+          _ReservationRow(
+            label: vehicleLabel,
+            value: reservation.vehiculeImmatriculation,
+          ),
+          _ReservationRow(
+            label: responsibleLabel,
+            value: reservation.clientNom,
+          ),
           _ReservationRow(
             label: passengersLabel,
             value: '${reservation.nombrePlace}',
@@ -510,29 +694,100 @@ class _ReservationCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Flexible(
-                child: SizedBox(
-                  height: 42,
-                  child: ElevatedButton(
-                    onPressed: isPaid ? onViewTicket : onPay,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3158F5),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      minimumSize: const Size(0, 42),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+              if (isPaid)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (canRefund)
+                      SizedBox(
+                        height: 42,
+                        child: OutlinedButton(
+                          onPressed: onRefund,
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 42),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: Text(
+                            refundLabel,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    if (canRefund) const SizedBox(width: 10),
+                    SizedBox(
+                      height: 42,
+                      child: ElevatedButton(
+                        onPressed: onViewTicket,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF3158F5),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          minimumSize: const Size(0, 42),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          ticketLabel,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
-                    child: Text(
-                      isPaid ? ticketLabel : payLabel,
-                      overflow: TextOverflow.ellipsis,
+                  ],
+                )
+              else
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (canCancel)
+                      SizedBox(
+                        height: 42,
+                        child: OutlinedButton(
+                          onPressed: onCancel,
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 42),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: Text(
+                            cancelLabel,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    if (canCancel) const SizedBox(width: 10),
+                    SizedBox(
+                      height: 42,
+                      child: ElevatedButton(
+                        onPressed: onPay,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF3158F5),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          minimumSize: const Size(0, 42),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          payLabel,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ),
             ],
           ),
         ],

@@ -103,6 +103,29 @@ class ReservationService {
     }
   }
 
+  Future<void> cancelReservation(String reservationId) async {
+    try {
+      await apiClient.dio.patch(
+        '${ApiConstants.reservations}/$reservationId/annuler',
+      );
+    } on DioException catch (e) {
+      final responseData = e.response?.data;
+
+      if (responseData is Map<String, dynamic>) {
+        final message = responseData['message']?.toString();
+        if (message != null && message.isNotEmpty) {
+          throw Exception(message);
+        }
+      }
+
+      throw Exception(
+        responseData?.toString() ?? 'Impossible d’annuler la réservation.',
+      );
+    } catch (_) {
+      throw Exception('Impossible d’annuler la réservation.');
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _getTrajetsRaw() async {
     final response = await apiClient.dio.get(ApiConstants.trajets);
 
@@ -144,7 +167,7 @@ class ReservationService {
               );
 
               debugPrint(
-                'RESERVATION => id=${model.id}, userId=${model.userId}, client=${model.clientNom}, trajetId=${model.trajetId}, date=${model.dateDepart}, total=${model.montantTotal}',
+                'RESERVATION => id=${model.id}, userId=${model.userId}, client=${model.clientNom}, trajetId=${model.trajetId}, date=${model.dateDepart}, total=${model.montantTotal}, statut=${model.statut}',
               );
 
               return model;
@@ -238,12 +261,8 @@ class ReservationService {
       username: username,
     );
 
-    final active = all.where((item) {
-      if (item.dateDepart.trim().isEmpty) {
-        return true;
-      }
-      return item.shouldShowInActiveReservations;
-    }).toList();
+    final active =
+        all.where((item) => item.shouldShowInActiveReservations).toList();
 
     debugPrint('ACTIVE RESERVATIONS COUNT = ${active.length}');
     return active;

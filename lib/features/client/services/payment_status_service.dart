@@ -51,7 +51,7 @@ class PaymentStatusService {
     final key = await _buildUserScopedKey('paid_reservation_ids');
 
     final ids = prefs.getStringList(key) ?? [];
-    ids.remove(reservationId);
+    ids.removeWhere((id) => id == reservationId);
     await prefs.setStringList(key, ids);
   }
 

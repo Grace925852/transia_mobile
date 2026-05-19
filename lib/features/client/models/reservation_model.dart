@@ -183,13 +183,12 @@ class ReservationModel {
 
   String get prixFormate => '${montantTotal.toStringAsFixed(0)} FCFA';
   String get prixUnitaireFormate => '${prixUnitaire.toStringAsFixed(0)} FCFA';
+  String get trajetLabel => '$villeDepart → $villeArrivee';
 
   String get heureFormatee {
     if (heureDepart.length >= 5) return heureDepart.substring(0, 5);
     return heureDepart;
   }
-
-  String get trajetLabel => '$villeDepart → $villeArrivee';
 
   DateTime? get departureDateTime {
     try {
@@ -212,12 +211,35 @@ class ReservationModel {
     }
   }
 
+  String get statutUpper => statut.trim().toUpperCase();
+
   bool get isPaidOrValidated {
-    final status = statut.toUpperCase();
+    final status = statutUpper;
     return status.contains('CONFIRME') ||
         status.contains('VALIDE') ||
         status.contains('PAYE') ||
         status.contains('PAYÉ');
+  }
+
+  bool get isCancelled {
+    final status = statutUpper;
+    return status.contains('ANNULE');
+  }
+
+  bool get isRefundRequested {
+    final status = statutUpper;
+    return status.contains('REMBOURSEMENT_DEMANDE') ||
+        status.contains('DEMANDE_REMBOURSEMENT') ||
+        status.contains('REMBOURSEMENT_EN_COURS');
+  }
+
+  bool get isRefunded {
+    final status = statutUpper;
+    return status.contains('REMBOURSE') || status.contains('REMBOURSÉ');
+  }
+
+  bool get isClosedForReservations {
+    return isCancelled || isRefunded;
   }
 
   bool get isPast {
@@ -226,19 +248,22 @@ class ReservationModel {
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-
     return departure.isBefore(today);
   }
 
   bool get isUpcoming => !isPast;
-  bool get shouldShowInActiveReservations => isUpcoming;
-  bool get shouldShowInHistory => isPast && isPaidOrValidated;
+
+  bool get shouldShowInActiveReservations =>
+      isUpcoming && !isClosedForReservations;
+
+  bool get shouldShowInHistory =>
+      !isClosedForReservations && isPast && isPaidOrValidated;
 
   bool get isRefundEligible {
     final departure = departureDateTime;
     if (departure == null) return false;
 
-    final limit = departure.subtract(const Duration(days: 2));
+    final limit = departure.subtract(const Duration(hours: 24));
     return DateTime.now().isBefore(limit);
   }
 
@@ -246,6 +271,6 @@ class ReservationModel {
     if (isRefundEligible) {
       return 'Remboursement encore possible.';
     }
-    return 'Le remboursement n’est autorisé qu’au moins 2 jours avant le départ.';
+    return 'Le remboursement n’est autorisé qu’avant les 24 heures précédant le départ.';
   }
 }
