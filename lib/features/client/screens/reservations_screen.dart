@@ -59,7 +59,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       final storedNumericUserIdString =
           await secureStorageService.getNumericUserId();
       final storedFullName = await secureStorageService.getFullName();
-      final storedUsername = await secureStorageService.getUsername();
+      final storedUsername = await secureStorageService.getTelephone();
 
       final storedNumericUserId =
           int.tryParse(storedNumericUserIdString ?? '');

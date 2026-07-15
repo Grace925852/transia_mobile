@@ -32,7 +32,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
   bool saisirNomsPassagers = false;
 
   String clientNom = '';
-  int? clientUserId;
+  String? clientUserId;
 
   late final SecureStorageService secureStorageService;
   late final ApiClient apiClient;
@@ -74,28 +74,27 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
 
   Future<void> _chargerSessionClient() async {
     final storedName = await secureStorageService.getFullName();
-    final storedUserId = await secureStorageService.getNumericUserId();
-    final parsedId = int.tryParse((storedUserId ?? '').trim());
+    final storedUserId = await secureStorageService.getUserId();
 
     if (!mounted) return;
 
     setState(() {
       clientNom = (storedName ?? '').trim();
-      clientUserId = parsedId;
+      clientUserId = (storedUserId ?? '').trim().isEmpty ? null : storedUserId!.trim();
     });
   }
 
-  Future<int?> _reloadClientUserId() async {
-    final storedUserId = await secureStorageService.getNumericUserId();
-    final parsedId = int.tryParse((storedUserId ?? '').trim());
+  Future<String?> _reloadClientUserId() async {
+    final storedUserId = await secureStorageService.getUserId();
+    final id = (storedUserId ?? '').trim().isEmpty ? null : storedUserId!.trim();
 
     if (mounted) {
       setState(() {
-        clientUserId = parsedId;
+        clientUserId = id;
       });
     }
 
-    return parsedId;
+    return id;
   }
 
   Future<String> _reloadClientNom() async {

@@ -1,7 +1,7 @@
 class AuthResponse {
   final String id;
   final String fullName;
-  final String username;
+  final String telephone;
   final String token;
   final String type;
   final List<String> roles;
@@ -9,7 +9,7 @@ class AuthResponse {
   AuthResponse({
     required this.id,
     required this.fullName,
-    required this.username,
+    required this.telephone,
     required this.token,
     required this.type,
     required this.roles,
@@ -25,7 +25,7 @@ class AuthResponse {
           json['name']?.toString() ??
           json['nom']?.toString() ??
           '',
-      username: json['username']?.toString() ??
+      telephone: json['telephone']?.toString() ??
           json['login']?.toString() ??
           '',
       token: json['token']?.toString() ??

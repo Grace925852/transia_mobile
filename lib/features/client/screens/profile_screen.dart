@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:transia_mobile/app/routes.dart';
+import 'package:transia_mobile/core/network/api_client.dart';
+import 'package:transia_mobile/core/network/self_service.dart';
 import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
+import 'package:transia_mobile/shared/widgets/user_avatar.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,9 +18,11 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final SecureStorageService storage = SecureStorageService();
   final AppPreferencesController prefs = AppPreferencesController.instance;
+  late final SelfService selfService = SelfService(apiClient: ApiClient(storage));
 
   String fullName = 'Client';
   String username = '';
+  String? photoBase64;
 
   bool notificationsEnabled = true;
   String favoriteDepartureCity = 'Lomé';
@@ -33,13 +38,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> chargerInfos() async {
     final name = await storage.getFullName();
-    final phone = await storage.getUsername();
+    final phone = await storage.getTelephone();
+    final profil = await selfService.getMyProfil();
 
     if (!mounted) return;
 
     setState(() {
       fullName = (name != null && name.trim().isNotEmpty) ? name : 'Client';
       username = phone ?? '';
+      photoBase64 = profil?.photoProfil;
     });
   }
 
@@ -187,17 +194,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   child: Column(
                     children: [
-                      CircleAvatar(
+                      UserAvatar(
+                        photoBase64: photoBase64,
+                        initiales: initiales,
                         radius: 34,
                         backgroundColor: primaryBlue,
-                        child: Text(
-                          initiales,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                        fontSize: 22,
                       ),
                       const SizedBox(height: 14),
                       Text(
@@ -489,6 +491,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ar: 'الحساب',
                   ),
                   color: titleColor,
+                ),
+                _ProfileTile(
+                  icon: Icons.edit_outlined,
+                  title: tr(
+                    fr: 'Modifier mon profil',
+                    en: 'Edit my profile',
+                    es: 'Editar mi perfil',
+                    ar: 'تعديل ملفي الشخصي',
+                  ),
+                  subtitle: tr(
+                    fr: 'Nom, téléphone, e-mail, mot de passe',
+                    en: 'Name, phone, email, password',
+                    es: 'Nombre, teléfono, correo, contraseña',
+                    ar: 'الاسم، الهاتف، البريد، كلمة المرور',
+                  ),
+                  cardColor: cardColor,
+                  iconBoxColor: iconBoxColor,
+                  iconColor: primaryBlue,
+                  titleColor: titleColor,
+                  subtitleColor: subtitleColor,
+                  trailingColor: subtitleColor,
+                  onTap: () {
+                    context.push(AppRoutes.editProfile);
+                  },
                 ),
                 _ProfileTile(
                   icon: Icons.logout_rounded,

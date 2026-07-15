@@ -4,6 +4,7 @@ import 'package:transia_mobile/app/routes.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
 import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
+import 'package:transia_mobile/features/auth/models/auth_response.dart';
 import 'package:transia_mobile/features/auth/services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController registerFullNameController =
       TextEditingController();
   final TextEditingController registerPhoneController = TextEditingController();
+  final TextEditingController registerEmailController = TextEditingController();
   final TextEditingController registerPasswordController =
       TextEditingController();
   final TextEditingController registerConfirmPasswordController =
@@ -52,6 +54,7 @@ class _LoginScreenState extends State<LoginScreen> {
     loginPasswordController.dispose();
     registerFullNameController.dispose();
     registerPhoneController.dispose();
+    registerEmailController.dispose();
     registerPasswordController.dispose();
     registerConfirmPasswordController.dispose();
     super.dispose();
@@ -72,11 +75,55 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  bool _hasRole(AuthResponse r, String role) {
+    final upper = role.toUpperCase();
+    return r.roles.any((s) {
+      final u = s.toUpperCase();
+      return u == upper || u == 'ROLE_$upper';
+    });
+  }
+
+  Future<void> _redirectByRole(AuthResponse user) async {
+    if (!mounted) return;
+    final isChauffeur = _hasRole(user, 'CHAUFFEUR');
+    final isLivreur = _hasRole(user, 'LIVREUR');
+
+    if (isChauffeur && isLivreur) {
+      await _showRolePicker();
+    } else if (isChauffeur) {
+      context.go(AppRoutes.chauffeur);
+    } else if (isLivreur) {
+      context.go(AppRoutes.livreur);
+    } else {
+      context.go(AppRoutes.client);
+    }
+  }
+
+  Future<void> _showRolePicker() async {
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (ctx) => _RolePickerSheet(
+        onChauffeur: () {
+          Navigator.of(ctx).pop();
+          context.go(AppRoutes.chauffeur);
+        },
+        onLivreur: () {
+          Navigator.of(ctx).pop();
+          context.go(AppRoutes.livreur);
+        },
+      ),
+    );
+  }
+
   Future<void> login() async {
-    final username = loginPhoneController.text.trim();
+    final telephone = loginPhoneController.text.trim();
     final password = loginPasswordController.text.trim();
 
-    if (username.isEmpty || password.isEmpty) {
+    if (telephone.isEmpty || password.isEmpty) {
       showMessage(
         tr(
           fr: 'Veuillez remplir tous les champs.',
@@ -94,7 +141,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final authService = _buildAuthService();
 
       final user = await authService.login(
-        username: username,
+        telephone: telephone,
         password: password,
       );
 
@@ -108,7 +155,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ar: 'مرحبًا ${user.fullName}',
         ),
       );
-      context.go(AppRoutes.client);
+      await _redirectByRole(user);
     } catch (e) {
       showMessage(e.toString().replaceAll('Exception: ', ''));
     } finally {
@@ -120,12 +167,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> register() async {
     final fullName = registerFullNameController.text.trim();
-    final username = registerPhoneController.text.trim();
+    final telephone = registerPhoneController.text.trim();
+    final email = registerEmailController.text.trim();
     final password = registerPasswordController.text.trim();
     final confirmPassword = registerConfirmPasswordController.text.trim();
 
     if (fullName.isEmpty ||
-        username.isEmpty ||
+        telephone.isEmpty ||
         password.isEmpty ||
         confirmPassword.isEmpty) {
       showMessage(
@@ -170,7 +218,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
       await authService.register(
         fullName: fullName,
-        username: username,
+        telephone: telephone,
+        email: email,
         password: password,
       );
 
@@ -189,7 +238,7 @@ class _LoginScreenState extends State<LoginScreen> {
         isLoginMode = true;
       });
 
-      loginPhoneController.text = username;
+      loginPhoneController.text = telephone;
       loginPasswordController.clear();
       registerPasswordController.clear();
       registerConfirmPasswordController.clear();
@@ -365,10 +414,10 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         Text(
           tr(
-            fr: 'Connectez-vous à votre compte client',
-            en: 'Sign in to your client account',
-            es: 'Conéctese a su cuenta de cliente',
-            ar: 'سجّل الدخول إلى حساب العميل الخاص بك',
+            fr: 'Connectez-vous à votre compte',
+            en: 'Sign in to your account',
+            es: 'Conéctese a su cuenta',
+            ar: 'سجّل الدخول إلى حسابك',
           ),
           style: TextStyle(
             fontSize: 14,
@@ -419,7 +468,22 @@ class _LoginScreenState extends State<LoginScreen> {
             ar: 'أدخل كلمة المرور',
           ),
         ),
-        const SizedBox(height: 26),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: isLoading ? null : () => context.push(AppRoutes.forgotPassword),
+            child: Text(
+              tr(
+                fr: 'Mot de passe oublié ?',
+                en: 'Forgot password?',
+                es: '¿Olvidó su contraseña?',
+                ar: 'نسيت كلمة المرور؟',
+              ),
+              style: TextStyle(color: primaryBlue, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
         SizedBox(
           width: double.infinity,
           height: 56,
@@ -508,6 +572,25 @@ class _LoginScreenState extends State<LoginScreen> {
             en: 'Enter your number',
             es: 'Ingrese su número',
             ar: 'أدخل رقمك',
+          ),
+        ),
+        const SizedBox(height: 18),
+        buildInputField(
+          context: context,
+          label: tr(
+            fr: 'E-mail (optionnel)',
+            en: 'Email (optional)',
+            es: 'Correo electrónico (opcional)',
+            ar: 'البريد الإلكتروني (اختياري)',
+          ),
+          controller: registerEmailController,
+          icon: Icons.mail_outline_rounded,
+          keyboardType: TextInputType.emailAddress,
+          hintText: tr(
+            fr: 'Pour récupérer votre mot de passe',
+            en: 'To recover your password',
+            es: 'Para recuperar su contraseña',
+            ar: 'لاسترداد كلمة المرور',
           ),
         ),
         const SizedBox(height: 18),
@@ -669,7 +752,7 @@ Widget _buildLogo() {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 18,
-                              color: Colors.white.withOpacity(0.88),
+                              color: Colors.white.withValues(alpha: 0.88),
                             ),
                           ),
                         ],
@@ -750,6 +833,153 @@ Widget _buildLogo() {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RolePickerSheet extends StatelessWidget {
+  final VoidCallback onChauffeur;
+  final VoidCallback onLivreur;
+
+  const _RolePickerSheet({
+    required this.onChauffeur,
+    required this.onLivreur,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final textColor = theme.textTheme.bodyLarge?.color ?? const Color(0xFF1E293B);
+    final subColor = theme.textTheme.bodyMedium?.color ?? const Color(0xFF64748B);
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: subColor.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Choisissez votre espace',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Votre compte a deux rôles actifs',
+            style: TextStyle(
+              fontSize: 13,
+              color: subColor,
+            ),
+          ),
+          const SizedBox(height: 24),
+          _SheetRoleButton(
+            icon: Icons.directions_bus_rounded,
+            label: 'Espace Chauffeur',
+            description: 'Gérez vos trajets et passagers',
+            color: const Color(0xFF7C3AED),
+            onTap: onChauffeur,
+          ),
+          const SizedBox(height: 12),
+          _SheetRoleButton(
+            icon: Icons.delivery_dining_rounded,
+            label: 'Espace Livreur',
+            description: 'Gérez vos tournées et livraisons',
+            color: const Color(0xFF059669),
+            onTap: onLivreur,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SheetRoleButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String description;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _SheetRoleButton({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: color.withValues(alpha: 0.25)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: color, size: 26),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: color.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios_rounded, color: color, size: 16),
+            ],
+          ),
         ),
       ),
     );

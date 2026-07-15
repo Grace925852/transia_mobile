@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:transia_mobile/features/chauffeur/screens/chauffeur_history_screen.dart';
 import 'package:transia_mobile/features/chauffeur/screens/chauffeur_home_screen.dart';
+import 'package:transia_mobile/features/chauffeur/screens/chauffeur_profile_screen.dart';
 import 'package:transia_mobile/features/chauffeur/screens/chauffeur_scan_trip_list_screen.dart';
-import 'package:transia_mobile/features/client/screens/profile_screen.dart';
 
 class ChauffeurMainScreen extends StatefulWidget {
   final int initialIndex;
@@ -29,7 +29,7 @@ class _ChauffeurMainScreenState extends State<ChauffeurMainScreen> {
       ChauffeurHomeScreen(),
       ChauffeurScanTripListScreen(),
       ChauffeurHistoryScreen(),
-      ProfileScreen(),
+      ChauffeurProfileScreen(),
     ];
   }
 
@@ -52,7 +52,7 @@ class _ChauffeurMainScreenState extends State<ChauffeurMainScreen> {
                 theme.cardColor,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.22 : 0.07),
+                color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.07),
                 blurRadius: 14,
                 offset: const Offset(0, -3),
               ),

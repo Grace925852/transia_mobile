@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
+import 'package:transia_mobile/core/network/self_service.dart';
 import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/client/models/trajet_model.dart';
 import 'package:transia_mobile/features/client/models/ville_model.dart';
 import 'package:transia_mobile/features/client/services/trajet_service.dart';
 import 'package:transia_mobile/features/client/services/ville_service.dart';
+import 'package:transia_mobile/shared/widgets/user_avatar.dart';
 
 class ClientHomeScreen extends StatefulWidget {
   final bool showScaffold;
@@ -37,8 +39,10 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   late final ApiClient apiClient;
   late final VilleService villeService;
   late final TrajetService trajetService;
+  late final SelfService selfService;
 
   String clientNomConnecte = 'Client';
+  String? clientPhotoBase64;
 
   AppPreferencesController get prefs => AppPreferencesController.instance;
 
@@ -50,6 +54,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     apiClient = ApiClient(secureStorageService);
     villeService = VilleService(apiClient: apiClient);
     trajetService = TrajetService(apiClient: apiClient);
+    selfService = SelfService(apiClient: apiClient);
 
     chargerNomClient();
     chargerDonnees();
@@ -66,6 +71,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
   Future<void> chargerNomClient() async {
     final nom = await secureStorageService.getFullName();
+    final profil = await selfService.getMyProfil();
 
     if (!mounted) return;
 
@@ -79,6 +85,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                   es: 'Cliente',
                   ar: 'العميل',
                 );
+      clientPhotoBase64 = profil?.photoProfil;
     });
   }
 
@@ -465,23 +472,12 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                   ),
                 ),
               ),
-              Container(
-                height: 52,
-                width: 52,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.20),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    initialesClient,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+              UserAvatar(
+                photoBase64: clientPhotoBase64,
+                initiales: initialesClient,
+                radius: 26,
+                backgroundColor: Colors.white.withOpacity(0.20),
+                fontSize: 16,
               ),
             ],
           ),
