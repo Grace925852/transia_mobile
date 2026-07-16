@@ -1,0 +1,331 @@
+class TripGpsPositionModel {
+  final int? id;
+  final double latitude;
+  final double longitude;
+  final double? vitesse;
+  final double? precisionGps;
+  final double? altitude;
+  final DateTime? dateHeure;
+  final int? suiviTrajetId;
+
+  const TripGpsPositionModel({
+    required this.id,
+    required this.latitude,
+    required this.longitude,
+    required this.vitesse,
+    required this.precisionGps,
+    required this.altitude,
+    required this.dateHeure,
+    required this.suiviTrajetId,
+  });
+
+  factory TripGpsPositionModel.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    return TripGpsPositionModel(
+      id: int.tryParse(
+        json['id']?.toString() ?? '',
+      ),
+      latitude: double.tryParse(
+            json['latitude']?.toString() ?? '',
+          ) ??
+          0,
+      longitude: double.tryParse(
+            json['longitude']?.toString() ?? '',
+          ) ??
+          0,
+      vitesse: double.tryParse(
+        json['vitesse']?.toString() ?? '',
+      ),
+      precisionGps: double.tryParse(
+        json['precisionGps']?.toString() ?? '',
+      ),
+      altitude: double.tryParse(
+        json['altitude']?.toString() ?? '',
+      ),
+      dateHeure: _parseDate(
+        json['dateHeure'],
+      ),
+      suiviTrajetId: int.tryParse(
+        json['suiviTrajetId']?.toString() ?? '',
+      ),
+    );
+  }
+
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+
+    try {
+      return DateTime.parse(
+        value.toString(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String get vitesseFormatee {
+    if (vitesse == null) return '-';
+
+    return '${vitesse!.toStringAsFixed(1)} km/h';
+  }
+
+  String get heureFormatee {
+    final date = dateHeure;
+
+    if (date == null) {
+      return '-';
+    }
+
+    final heure = date.hour
+        .toString()
+        .padLeft(2, '0');
+
+    final minute = date.minute
+        .toString()
+        .padLeft(2, '0');
+
+    final seconde = date.second
+        .toString()
+        .padLeft(2, '0');
+
+    return '$heure:$minute:$seconde';
+  }
+}
+
+class TripTrackingModel {
+  final int id;
+  final String statut;
+  final String trajetId;
+
+  final String villeDepart;
+  final String villeArrivee;
+
+  final String chauffeurNom;
+  final int? chauffeurId;
+
+  final String vehicule;
+  final String immatriculation;
+
+  final String dateDepart;
+  final String heureDepart;
+
+  final DateTime? dateDemarrage;
+  final DateTime? dateFin;
+  final DateTime? derniereMiseAJour;
+
+  final String message;
+  final TripGpsPositionModel? dernierePosition;
+
+  const TripTrackingModel({
+    required this.id,
+    required this.statut,
+    required this.trajetId,
+    required this.villeDepart,
+    required this.villeArrivee,
+    required this.chauffeurNom,
+    required this.chauffeurId,
+    required this.vehicule,
+    required this.immatriculation,
+    required this.dateDepart,
+    required this.heureDepart,
+    required this.dateDemarrage,
+    required this.dateFin,
+    required this.derniereMiseAJour,
+    required this.message,
+    required this.dernierePosition,
+  });
+
+  factory TripTrackingModel.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    final positionData =
+        json['dernierePosition'];
+
+    return TripTrackingModel(
+      id: int.tryParse(
+            json['id']?.toString() ?? '',
+          ) ??
+          0,
+      statut:
+          (json['statut'] ?? 'PROGRAMME')
+              .toString(),
+      trajetId:
+          (json['trajetId'] ?? '').toString(),
+      villeDepart:
+          (json['villeDepart'] ?? '').toString(),
+      villeArrivee:
+          (json['villeArrivee'] ?? '').toString(),
+      chauffeurNom:
+          (json['chauffeurNom'] ?? '').toString(),
+      chauffeurId: int.tryParse(
+        json['chauffeurId']?.toString() ?? '',
+      ),
+      vehicule:
+          (json['vehicule'] ?? '').toString(),
+      immatriculation:
+          (json['immatriculation'] ?? '').toString(),
+      dateDepart:
+          (json['dateDepart'] ?? '').toString(),
+      heureDepart:
+          (json['heureDepart'] ?? '').toString(),
+      dateDemarrage: _parseDate(
+        json['dateDemarrage'],
+      ),
+      dateFin: _parseDate(
+        json['dateFin'],
+      ),
+      derniereMiseAJour: _parseDate(
+        json['derniereMiseAJour'],
+      ),
+      message:
+          (json['message'] ?? '').toString(),
+      dernierePosition: positionData is Map
+          ? TripGpsPositionModel.fromJson(
+              Map<String, dynamic>.from(
+                positionData,
+              ),
+            )
+          : null,
+    );
+  }
+
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+
+    try {
+      return DateTime.parse(
+        value.toString(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  TripTrackingModel copyWith({
+    int? id,
+    String? statut,
+    String? trajetId,
+    String? villeDepart,
+    String? villeArrivee,
+    String? chauffeurNom,
+    int? chauffeurId,
+    String? vehicule,
+    String? immatriculation,
+    String? dateDepart,
+    String? heureDepart,
+    DateTime? dateDemarrage,
+    DateTime? dateFin,
+    DateTime? derniereMiseAJour,
+    String? message,
+    TripGpsPositionModel? dernierePosition,
+  }) {
+    return TripTrackingModel(
+      id: id ?? this.id,
+      statut: statut ?? this.statut,
+      trajetId: trajetId ?? this.trajetId,
+      villeDepart:
+          villeDepart ?? this.villeDepart,
+      villeArrivee:
+          villeArrivee ?? this.villeArrivee,
+      chauffeurNom:
+          chauffeurNom ?? this.chauffeurNom,
+      chauffeurId:
+          chauffeurId ?? this.chauffeurId,
+      vehicule: vehicule ?? this.vehicule,
+      immatriculation:
+          immatriculation ?? this.immatriculation,
+      dateDepart:
+          dateDepart ?? this.dateDepart,
+      heureDepart:
+          heureDepart ?? this.heureDepart,
+      dateDemarrage:
+          dateDemarrage ?? this.dateDemarrage,
+      dateFin: dateFin ?? this.dateFin,
+      derniereMiseAJour:
+          derniereMiseAJour ??
+          this.derniereMiseAJour,
+      message: message ?? this.message,
+      dernierePosition:
+          dernierePosition ??
+          this.dernierePosition,
+    );
+  }
+
+  String get statutNormalise =>
+      statut.trim().toUpperCase();
+
+  bool get isProgramme =>
+      statutNormalise == 'PROGRAMME';
+
+  bool get isEnCours =>
+      statutNormalise == 'EN_COURS';
+
+  bool get isPause =>
+      statutNormalise == 'PAUSE';
+
+  bool get isTermine =>
+      statutNormalise == 'TERMINE';
+
+  bool get isAnnule =>
+      statutNormalise == 'ANNULE';
+
+  bool get isClosed =>
+      isTermine || isAnnule;
+
+  String get statutLabel {
+    switch (statutNormalise) {
+      case 'EN_COURS':
+        return 'Trajet en cours';
+
+      case 'PAUSE':
+        return 'Trajet en pause';
+
+      case 'TERMINE':
+        return 'Trajet terminé';
+
+      case 'ANNULE':
+        return 'Trajet annulé';
+
+      default:
+        return 'Trajet programmé';
+    }
+  }
+
+  String get trajetLabel {
+    if (villeDepart.isEmpty &&
+        villeArrivee.isEmpty) {
+      return '';
+    }
+
+    return '$villeDepart → $villeArrivee';
+  }
+
+  String get derniereMiseAJourFormatee {
+    final date = derniereMiseAJour;
+
+    if (date == null) {
+      return '-';
+    }
+
+    final jour = date.day
+        .toString()
+        .padLeft(2, '0');
+
+    final mois = date.month
+        .toString()
+        .padLeft(2, '0');
+
+    final annee = date.year;
+
+    final heure = date.hour
+        .toString()
+        .padLeft(2, '0');
+
+    final minute = date.minute
+        .toString()
+        .padLeft(2, '0');
+
+    return '$jour/$mois/$annee à $heure:$minute';
+  }
+}

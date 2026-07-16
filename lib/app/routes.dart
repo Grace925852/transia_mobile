@@ -44,7 +44,7 @@ class AppRoutes {
   static const String rating = '/rating';
 }
 
-const bool launchClientOnly = false;
+const bool launchClientOnly = true;
 
 final GoRouter appRouter = GoRouter(
   initialLocation: launchClientOnly ? AppRoutes.login : AppRoutes.chauffeurLogin,

@@ -1,11 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
+import 'package:transia_mobile/core/location/location_adress_service.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/chauffeur/models/chauffeur_passenger_model.dart';
 import 'package:transia_mobile/features/chauffeur/models/chauffeur_trip_model.dart';
+import 'package:transia_mobile/features/chauffeur/models/trip_tracking_model.dart';
 import 'package:transia_mobile/features/chauffeur/services/chauffeur_service.dart';
+import 'package:transia_mobile/features/chauffeur/services/trip_tracking_service.dart';
 
 class ChauffeurTripPassengersScreen extends StatefulWidget {
   final ChauffeurTripModel trip;
@@ -25,67 +31,151 @@ class _ChauffeurTripPassengersScreenState
   late final SecureStorageService secureStorageService;
   late final ApiClient apiClient;
   late final ChauffeurService chauffeurService;
+  late final TripTrackingService trackingService;
 
-  bool isLoading = true;
-  List<ChauffeurPassengerModel> passengers = [];
+  StreamSubscription<Position>? positionSubscription;
+
+  bool isLoadingPassengers = true;
+  bool isLoadingTracking = true;
+  bool isTrackingActionLoading = false;
+  bool isSendingGps = false;
+  bool isAddressLoading = false;
+
   bool hasChanged = false;
 
+  String? passengersError;
+  String? trackingError;
+  String? gpsError;
+
+  String currentReadableAddress = 'Position non encore disponible';
+
+  double? lastGeocodedLatitude;
+  double? lastGeocodedLongitude;
+
+  List<ChauffeurPassengerModel> passengers = [];
+  TripTrackingModel? tracking;
+
   int get expectedCount => passengers.length;
-  int get presentCount => passengers.where((e) => e.present).length;
+
+  int get presentCount {
+    return passengers.where((passenger) => passenger.present).length;
+  }
+
+  int get remainingCount {
+    final remaining = expectedCount - presentCount;
+    return remaining < 0 ? 0 : remaining;
+  }
+
+  List<ChauffeurPassengerModel> get presentPassengers {
+    return passengers.where((passenger) => passenger.present).toList();
+  }
+
+  List<ChauffeurPassengerModel> get waitingPassengers {
+    return passengers.where((passenger) => !passenger.present).toList();
+  }
 
   @override
   void initState() {
     super.initState();
+
     secureStorageService = SecureStorageService();
     apiClient = ApiClient(secureStorageService);
-    chauffeurService = ChauffeurService(apiClient: apiClient);
-    loadPassengers();
+
+    chauffeurService = ChauffeurService(
+      apiClient: apiClient,
+    );
+
+    trackingService = TripTrackingService(
+      apiClient: apiClient,
+    );
+
+    _initializeScreen();
   }
 
+  @override
+  void dispose() {
+    positionSubscription?.cancel();
+    positionSubscription = null;
+    super.dispose();
+  }
+
+  Future<void> _initializeScreen() async {
+    await Future.wait([
+      loadPassengers(),
+      loadTracking(),
+    ]);
+  }
+
+  Future<void> refreshScreen() async {
+    await Future.wait([
+      loadPassengers(),
+      loadTracking(),
+    ]);
+  }
+
+  // ============================================================
+  // PASSAGERS
+  // ============================================================
+
   Future<void> loadPassengers() async {
-    setState(() => isLoading = true);
+    if (mounted) {
+      setState(() {
+        isLoadingPassengers = true;
+        passengersError = null;
+      });
+    }
 
     try {
-      final result =
-          await chauffeurService.getPaidPassengersForTrip(widget.trip.id);
+      final result = await chauffeurService.getPaidPassengersForTrip(
+        widget.trip.id,
+      );
 
       if (!mounted) return;
+
       setState(() {
         passengers = result;
-        isLoading = false;
+        isLoadingPassengers = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
-      );
+
+      setState(() {
+        isLoadingPassengers = false;
+        passengersError = _cleanError(e);
+      });
     }
   }
 
-  Future<void> markPresent(ChauffeurPassengerModel passenger) async {
+  Future<void> markPresent(
+    ChauffeurPassengerModel passenger,
+  ) async {
     if (passenger.present) return;
 
-    await chauffeurService.markPassengerPresent(
-      tripId: widget.trip.id,
-      billetId: passenger.billetId,
-    );
+    try {
+      await chauffeurService.markPassengerPresent(
+        tripId: widget.trip.id,
+        billetId: passenger.billetId,
+      );
 
-    setState(() {
-      passengers = passengers.map((e) {
-        if (e.billetId == passenger.billetId) {
-          return e.copyWith(present: true);
-        }
-        return e;
-      }).toList();
-      hasChanged = true;
-    });
+      if (!mounted) return;
 
-    if (!mounted) return;
+      setState(() {
+        passengers = passengers.map((item) {
+          if (item.billetId == passenger.billetId) {
+            return item.copyWith(present: true);
+          }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Client marqué présent.')),
-    );
+          return item;
+        }).toList();
+
+        hasChanged = true;
+      });
+
+      _showMessage('Client marqué présent.');
+    } catch (e) {
+      if (!mounted) return;
+      _showMessage(_cleanError(e));
+    }
   }
 
   Future<void> openScanScreen() async {
@@ -101,14 +191,15 @@ class _ChauffeurTripPassengersScreenState
 
     if (result is String && result.isNotEmpty) {
       await loadPassengers();
+
+      if (!mounted) return;
+
       setState(() {
         hasChanged = true;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Passager marqué présent avec succès.'),
-        ),
+      _showMessage(
+        'Passager marqué présent avec succès.',
       );
     }
   }
@@ -122,44 +213,966 @@ class _ChauffeurTripPassengersScreenState
     if (!mounted) return;
 
     if (result == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Problème signalé avec succès.'),
-        ),
+      _showMessage(
+        'Problème signalé avec succès.',
       );
     }
   }
 
+  // ============================================================
+  // CHARGEMENT DU SUIVI
+  // ============================================================
+
+  Future<void> loadTracking() async {
+    if (mounted) {
+      setState(() {
+        isLoadingTracking = true;
+        trackingError = null;
+      });
+    }
+
+    try {
+      final result = await trackingService.getTrackingByTripId(
+        widget.trip.id,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        tracking = result;
+        isLoadingTracking = false;
+      });
+
+      await _updateReadableAddress(
+        result?.dernierePosition,
+      );
+
+      if (result?.isEnCours == true) {
+        await _startGpsStream();
+      } else {
+        await _stopGpsStream();
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoadingTracking = false;
+        trackingError = _cleanError(e);
+      });
+    }
+  }
+
+  // ============================================================
+  // DÉMARRAGE DU TRAJET
+  // ============================================================
+
+  Future<void> startTripTracking() async {
+    if (isTrackingActionLoading) return;
+
+    final permissionGranted = await _ensureLocationPermission();
+
+    if (!permissionGranted) return;
+
+    setState(() {
+      isTrackingActionLoading = true;
+      trackingError = null;
+      gpsError = null;
+    });
+
+    try {
+      final result = await trackingService.startTracking(
+        widget.trip.id,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        tracking = result;
+        isTrackingActionLoading = false;
+        hasChanged = true;
+      });
+
+      await _sendCurrentPositionOnce();
+      await _startGpsStream();
+
+      if (!mounted) return;
+
+      _showMessage(
+        'Le trajet a démarré. Le partage de position est actif.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isTrackingActionLoading = false;
+        trackingError = _cleanError(e);
+      });
+
+      _showMessage(trackingError!);
+    }
+  }
+
+  // ============================================================
+  // PAUSE
+  // ============================================================
+
+  Future<void> pauseTripTracking() async {
+    final currentTracking = tracking;
+
+    if (currentTracking == null || isTrackingActionLoading) {
+      return;
+    }
+
+    setState(() {
+      isTrackingActionLoading = true;
+      trackingError = null;
+    });
+
+    try {
+      final result = await trackingService.pauseTracking(
+        currentTracking.id,
+      );
+
+      await _stopGpsStream();
+
+      if (!mounted) return;
+
+      setState(() {
+        tracking = result;
+        isTrackingActionLoading = false;
+        hasChanged = true;
+      });
+
+      _showMessage(
+        'Le trajet est maintenant en pause.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isTrackingActionLoading = false;
+        trackingError = _cleanError(e);
+      });
+
+      _showMessage(trackingError!);
+    }
+  }
+
+  // ============================================================
+  // REPRISE
+  // ============================================================
+
+  Future<void> resumeTripTracking() async {
+    final currentTracking = tracking;
+
+    if (currentTracking == null || isTrackingActionLoading) {
+      return;
+    }
+
+    final permissionGranted = await _ensureLocationPermission();
+
+    if (!permissionGranted) return;
+
+    setState(() {
+      isTrackingActionLoading = true;
+      trackingError = null;
+      gpsError = null;
+    });
+
+    try {
+      final result = await trackingService.resumeTracking(
+        currentTracking.id,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        tracking = result;
+        isTrackingActionLoading = false;
+        hasChanged = true;
+      });
+
+      await _sendCurrentPositionOnce();
+      await _startGpsStream();
+
+      if (!mounted) return;
+
+      _showMessage(
+        'Le trajet a repris. Le partage de position est actif.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isTrackingActionLoading = false;
+        trackingError = _cleanError(e);
+      });
+
+      _showMessage(trackingError!);
+    }
+  }
+
+  // ============================================================
+  // FIN DU TRAJET
+  // ============================================================
+
+  Future<void> finishTripTracking() async {
+    final currentTracking = tracking;
+
+    if (currentTracking == null || isTrackingActionLoading) {
+      return;
+    }
+
+    final confirmation = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Terminer le trajet'),
+          content: const Text(
+            'Voulez-vous confirmer la fin de ce trajet ? '
+            'Le partage de position GPS sera arrêté.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: const Text('Non'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, true);
+              },
+              child: const Text('Oui, terminer'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmation != true) return;
+
+    setState(() {
+      isTrackingActionLoading = true;
+      trackingError = null;
+    });
+
+    try {
+      if (currentTracking.isEnCours) {
+        await _sendCurrentPositionOnce(
+          showError: false,
+        );
+      }
+
+      final result = await trackingService.finishTracking(
+        currentTracking.id,
+      );
+
+      await _stopGpsStream();
+
+      if (!mounted) return;
+
+      setState(() {
+        tracking = result;
+        isTrackingActionLoading = false;
+        hasChanged = true;
+      });
+
+      _showMessage(
+        'Trajet terminé avec succès.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isTrackingActionLoading = false;
+        trackingError = _cleanError(e);
+      });
+
+      _showMessage(trackingError!);
+    }
+  }
+
+  // ============================================================
+  // PERMISSIONS GPS
+  // ============================================================
+
+  Future<bool> _ensureLocationPermission() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+
+    if (!serviceEnabled) {
+      if (!mounted) return false;
+
+      final openSettings = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Localisation désactivée'),
+            content: const Text(
+              'Activez la localisation du téléphone pour démarrer '
+              'le suivi du trajet.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext, false);
+                },
+                child: const Text('Annuler'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext, true);
+                },
+                child: const Text('Ouvrir les paramètres'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (openSettings == true) {
+        await Geolocator.openLocationSettings();
+      }
+
+      return false;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+
+    if (permission == LocationPermission.denied) {
+      if (mounted) {
+        _showMessage(
+          'La permission de localisation a été refusée.',
+        );
+      }
+
+      return false;
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      if (!mounted) return false;
+
+      final openSettings = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Permission requise'),
+            content: const Text(
+              'La localisation a été refusée définitivement. '
+              'Autorisez-la dans les paramètres de l’application.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext, false);
+                },
+                child: const Text('Fermer'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext, true);
+                },
+                child: const Text('Paramètres'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (openSettings == true) {
+        await Geolocator.openAppSettings();
+      }
+
+      return false;
+    }
+
+    return true;
+  }
+
+  // ============================================================
+  // ÉCOUTE GPS
+  // ============================================================
+
+  Future<void> _startGpsStream() async {
+    if (positionSubscription != null) {
+      return;
+    }
+
+    final currentTracking = tracking;
+
+    if (currentTracking == null || !currentTracking.isEnCours) {
+      return;
+    }
+
+    final permissionGranted = await _ensureLocationPermission();
+
+    if (!permissionGranted) return;
+
+    const locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 20,
+    );
+
+    positionSubscription = Geolocator.getPositionStream(
+      locationSettings: locationSettings,
+    ).listen(
+      (position) async {
+        final activeTracking = tracking;
+
+        if (activeTracking == null || !activeTracking.isEnCours) {
+          return;
+        }
+
+        await _sendPositionToBackend(
+          trackingId: activeTracking.id,
+          position: position,
+        );
+      },
+      onError: (Object error) {
+        if (!mounted) return;
+
+        setState(() {
+          gpsError = 'Erreur GPS : $error';
+        });
+      },
+    );
+  }
+
+  Future<void> _stopGpsStream() async {
+    await positionSubscription?.cancel();
+    positionSubscription = null;
+  }
+
+  Future<void> _sendCurrentPositionOnce({
+    bool showError = true,
+  }) async {
+    final currentTracking = tracking;
+
+    if (currentTracking == null || !currentTracking.isEnCours) {
+      return;
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+
+      await _sendPositionToBackend(
+        trackingId: currentTracking.id,
+        position: position,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        gpsError = _cleanError(e);
+      });
+
+      if (showError) {
+        _showMessage(gpsError!);
+      }
+    }
+  }
+
+  Future<void> _sendPositionToBackend({
+    required int trackingId,
+    required Position position,
+  }) async {
+    if (isSendingGps) return;
+
+    isSendingGps = true;
+
+    try {
+      final speedKmh = position.speed < 0
+          ? 0.0
+          : position.speed * 3.6;
+
+      final savedPosition = await trackingService.sendPosition(
+        trackingId: trackingId,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        vitesse: speedKmh,
+        precisionGps: position.accuracy,
+        altitude: position.altitude,
+      );
+
+      if (!mounted) return;
+
+      final currentTracking = tracking;
+
+      if (currentTracking != null) {
+        setState(() {
+          gpsError = null;
+
+          tracking = currentTracking.copyWith(
+            derniereMiseAJour:
+                savedPosition.dateHeure ?? DateTime.now(),
+            dernierePosition: savedPosition,
+          );
+        });
+      }
+
+      await _updateReadableAddress(savedPosition);
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        gpsError = _cleanError(e);
+      });
+    } finally {
+      isSendingGps = false;
+    }
+  }
+
+  // ============================================================
+  // CONVERSION COORDONNÉES → QUARTIER / VILLE
+  // ============================================================
+
+  Future<void> _updateReadableAddress(
+    TripGpsPositionModel? position,
+  ) async {
+    if (position == null) {
+      if (!mounted) return;
+
+      setState(() {
+        currentReadableAddress = 'Position non encore disponible';
+        isAddressLoading = false;
+      });
+
+      return;
+    }
+
+    final previousLatitude = lastGeocodedLatitude;
+    final previousLongitude = lastGeocodedLongitude;
+
+    final isSameArea = previousLatitude != null &&
+        previousLongitude != null &&
+        (position.latitude - previousLatitude).abs() < 0.001 &&
+        (position.longitude - previousLongitude).abs() < 0.001;
+
+    if (isSameArea) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        isAddressLoading = true;
+      });
+    }
+
+    final address = await LocationAddressService.instance.getReadableAddress(
+      latitude: position.latitude,
+      longitude: position.longitude,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      currentReadableAddress = address;
+      isAddressLoading = false;
+      lastGeocodedLatitude = position.latitude;
+      lastGeocodedLongitude = position.longitude;
+    });
+  }
+
+  // ============================================================
+  // INTERFACE DU SUIVI
+  // ============================================================
+
+  Color _trackingStatusColor(
+    TripTrackingModel? value,
+  ) {
+    if (value?.isEnCours == true) {
+      return const Color(0xFF10B981);
+    }
+
+    if (value?.isPause == true) {
+      return const Color(0xFFF59E0B);
+    }
+
+    if (value?.isTermine == true) {
+      return const Color(0xFF3158F5);
+    }
+
+    if (value?.isAnnule == true) {
+      return const Color(0xFFEF4444);
+    }
+
+    return const Color(0xFF6B7280);
+  }
+
+  Widget _buildTrackingActions() {
+    if (isTrackingActionLoading) {
+      return const SizedBox(
+        height: 52,
+        child: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    final currentTracking = tracking;
+
+    if (currentTracking == null || currentTracking.isProgramme) {
+      return SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: ElevatedButton.icon(
+          onPressed: startTripTracking,
+          icon: const Icon(Icons.play_arrow_rounded),
+          label: const Text('Démarrer le trajet'),
+        ),
+      );
+    }
+
+    if (currentTracking.isEnCours) {
+      return Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 50,
+                  child: OutlinedButton.icon(
+                    onPressed: pauseTripTracking,
+                    icon: const Icon(Icons.pause_rounded),
+                    label: const Text('Mettre en pause'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: SizedBox(
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: finishTripTracking,
+                    icon: const Icon(Icons.flag_rounded),
+                    label: const Text('Terminer'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Row(
+            children: [
+              Icon(
+                Icons.location_on_rounded,
+                size: 18,
+                color: Color(0xFF10B981),
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Le partage automatique de la position est actif.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF10B981),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    if (currentTracking.isPause) {
+      return Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: resumeTripTracking,
+                icon: const Icon(Icons.play_arrow_rounded),
+                label: const Text('Reprendre'),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: SizedBox(
+              height: 50,
+              child: OutlinedButton.icon(
+                onPressed: finishTripTracking,
+                icon: const Icon(Icons.flag_outlined),
+                label: const Text('Terminer'),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _trackingStatusColor(currentTracking).withOpacity(0.10),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        currentTracking.isTermine
+            ? 'Ce trajet est terminé. Le partage GPS est arrêté.'
+            : 'Ce trajet a été annulé.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: _trackingStatusColor(currentTracking),
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTrackingCard(
+    ThemeData theme,
+  ) {
+    final statusColor = _trackingStatusColor(tracking);
+    final position = tracking?.dernierePosition;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Suivi du trajet',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+              ),
+              if (!isLoadingTracking)
+                _StatusBadge(
+                  text: tracking?.statutLabel ?? 'Non démarré',
+                  color: statusColor,
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (isLoadingTracking)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 22),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else ...[
+            _InfoRow(
+              label: 'Statut',
+              value: tracking?.statutLabel ?? 'Trajet programmé',
+            ),
+            _InfoRow(
+              label: 'Position actuelle',
+              value: isAddressLoading
+                  ? 'Recherche du lieu...'
+                  : currentReadableAddress,
+            ),
+            _InfoRow(
+              label: 'Vitesse',
+              value: position?.vitesseFormatee ?? '-',
+            ),
+            _InfoRow(
+              label: 'Dernière mise à jour',
+              value: tracking?.derniereMiseAJourFormatee ?? '-',
+            ),
+            if (tracking?.message.trim().isNotEmpty == true) ...[
+              const SizedBox(height: 4),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  tracking!.message,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF92400E),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+            if (trackingError != null &&
+                trackingError!.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _ErrorText(message: trackingError!),
+            ],
+            if (gpsError != null && gpsError!.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _ErrorText(message: gpsError!),
+            ],
+            const SizedBox(height: 16),
+            _buildTrackingActions(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // INTERFACE PASSAGERS
+  // ============================================================
+
+  Widget _buildPassengerCard(
+    ChauffeurPassengerModel passenger,
+    ThemeData theme,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: passenger.present
+            ? Border.all(
+                color: const Color(0xFF10B981).withOpacity(0.25),
+              )
+            : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  passenger.passagerNom.trim().isEmpty
+                      ? 'Passager'
+                      : passenger.passagerNom,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF374151),
+                  ),
+                ),
+              ),
+              _StatusBadge(
+                text: passenger.present ? 'Présent' : 'En attente',
+                color: passenger.present
+                    ? const Color(0xFF10B981)
+                    : const Color(0xFFF59E0B),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _MiniInfo(
+            icon: Icons.event_seat_outlined,
+            text: 'Siège : ${passenger.siege}',
+          ),
+          const SizedBox(height: 7),
+          _MiniInfo(
+            icon: Icons.badge_outlined,
+            text: 'Billet : ${passenger.billetId}',
+          ),
+          const SizedBox(height: 7),
+          _MiniInfo(
+            icon: Icons.receipt_long_outlined,
+            text: 'Réservation : ${passenger.reservationId}',
+          ),
+          if (passenger.clientResponsable.trim().isNotEmpty) ...[
+            const SizedBox(height: 7),
+            _MiniInfo(
+              icon: Icons.person_outline_rounded,
+              text: 'Responsable : ${passenger.clientResponsable}',
+            ),
+          ],
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: passenger.present
+                  ? null
+                  : () => markPresent(passenger),
+              icon: Icon(
+                passenger.present
+                    ? Icons.check_circle_rounded
+                    : Icons.person_add_alt_1_rounded,
+              ),
+              label: Text(
+                passenger.present
+                    ? 'Déjà présent'
+                    : 'Marquer présent',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final presentPassengers = passengers.where((e) => e.present).toList();
+
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (_, __) {
-        context.pop(hasChanged);
+      onPopInvokedWithResult: (
+        didPop,
+        result,
+      ) {
+        if (!didPop) {
+          context.pop(hasChanged);
+        }
       },
       child: Scaffold(
         backgroundColor: const Color(0xFFF5F7FF),
         appBar: AppBar(
           leading: IconButton(
-            onPressed: () => context.pop(hasChanged),
-            icon: const Icon(Icons.arrow_back_ios_new_rounded),
+            onPressed: () {
+              context.pop(hasChanged);
+            },
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+            ),
           ),
           title: const Text('Détail du trajet'),
           actions: [
             IconButton(
+              tooltip: 'Scanner un billet',
               onPressed: openScanScreen,
-              icon: const Icon(Icons.qr_code_scanner_rounded),
+              icon: const Icon(
+                Icons.qr_code_scanner_rounded,
+              ),
             ),
           ],
         ),
         body: RefreshIndicator(
-          onRefresh: loadPassengers,
+          onRefresh: refreshScreen,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(
+              18,
+              18,
+              18,
+              32,
+            ),
             children: [
+              // Informations générales
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -177,27 +1190,62 @@ class _ChauffeurTripPassengersScreenState
                         color: Color(0xFF374151),
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    _InfoRow(label: 'Date', value: widget.trip.dateDepart),
-                    _InfoRow(label: 'Heure', value: widget.trip.heureFormatee),
+                    const SizedBox(height: 16),
+                    _InfoRow(
+                      label: 'Date',
+                      value: widget.trip.dateDepart,
+                    ),
+                    _InfoRow(
+                      label: 'Heure',
+                      value: widget.trip.heureFormatee,
+                    ),
                     _InfoRow(
                       label: 'Véhicule',
                       value: widget.trip.vehiculeImmatriculation,
                     ),
-                    _InfoRow(label: 'Clients attendus', value: '$expectedCount'),
-                    _InfoRow(label: 'Présents', value: '$presentCount'),
-                    _InfoRow(
-                      label: 'Restants',
-                      value: '${(expectedCount - presentCount).clamp(0, 9999)}',
+                    const Divider(height: 28),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _CounterBox(
+                            label: 'Attendus',
+                            value: expectedCount,
+                            icon: Icons.groups_2_outlined,
+                            color: const Color(0xFF3158F5),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _CounterBox(
+                            label: 'Présents',
+                            value: presentCount,
+                            icon: Icons.check_circle_outline_rounded,
+                            color: const Color(0xFF10B981),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _CounterBox(
+                            label: 'Restants',
+                            value: remainingCount,
+                            icon: Icons.hourglass_bottom_rounded,
+                            color: const Color(0xFFF59E0B),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
                       height: 50,
                       child: OutlinedButton.icon(
                         onPressed: openScanScreen,
-                        icon: const Icon(Icons.qr_code_scanner_rounded),
-                        label: const Text('Scanner et cocher présent'),
+                        icon: const Icon(
+                          Icons.qr_code_scanner_rounded,
+                        ),
+                        label: const Text(
+                          'Scanner et cocher présent',
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -206,18 +1254,37 @@ class _ChauffeurTripPassengersScreenState
                       height: 50,
                       child: ElevatedButton.icon(
                         onPressed: openReportProblemScreen,
-                        icon: const Icon(Icons.report_problem_outlined),
-                        label: const Text('Signaler un problème'),
+                        icon: const Icon(
+                          Icons.report_problem_outlined,
+                        ),
+                        label: const Text(
+                          'Signaler un problème',
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
+
               const SizedBox(height: 16),
-              if (isLoading)
+
+              // Suivi GPS
+              _buildTrackingCard(theme),
+
+              const SizedBox(height: 20),
+
+              // Passagers
+              if (isLoadingPassengers)
                 const Padding(
-                  padding: EdgeInsets.only(top: 80),
-                  child: Center(child: CircularProgressIndicator()),
+                  padding: EdgeInsets.only(top: 60),
+                  child: Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else if (passengersError != null)
+                _ErrorCard(
+                  message: passengersError!,
+                  onRetry: loadPassengers,
                 )
               else if (passengers.isEmpty)
                 Container(
@@ -226,12 +1293,23 @@ class _ChauffeurTripPassengersScreenState
                     color: theme.cardColor,
                     borderRadius: BorderRadius.circular(24),
                   ),
-                  child: const Text(
-                    'Aucun passager trouvé pour ce trajet.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF6B7280),
-                    ),
+                  child: const Column(
+                    children: [
+                      Icon(
+                        Icons.people_outline_rounded,
+                        size: 46,
+                        color: Color(0xFF9CA3AF),
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        'Aucun passager payé trouvé pour ce trajet.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                    ],
                   ),
                 )
               else ...[
@@ -263,48 +1341,16 @@ class _ChauffeurTripPassengersScreenState
                   ...presentPassengers.map(
                     (passenger) => Padding(
                       padding: const EdgeInsets.only(bottom: 10),
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: theme.cardColor,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: const Color(0xFF10B981).withOpacity(0.25),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.check_circle_rounded,
-                              color: Color(0xFF10B981),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                passenger.passagerNom,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF374151),
-                                ),
-                              ),
-                            ),
-                            Text(
-                              passenger.siege,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF10B981),
-                              ),
-                            ),
-                          ],
-                        ),
+                      child: _PresentPassengerTile(
+                        passenger: passenger,
                       ),
                     ),
                   ),
-                const SizedBox(height: 18),
+
+                const SizedBox(height: 20),
+
                 const Text(
-                  'Clients à marquer',
+                  'Clients à embarquer',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
@@ -312,81 +1358,44 @@ class _ChauffeurTripPassengersScreenState
                   ),
                 ),
                 const SizedBox(height: 10),
-                ...passengers.map(
-                  (passenger) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: theme.cardColor,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  passenger.passagerNom,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF374151),
-                                  ),
-                                ),
-                              ),
-                              _StatusBadge(
-                                text: passenger.present ? 'Présent' : 'En attente',
-                                color: passenger.present
-                                    ? const Color(0xFF10B981)
-                                    : const Color(0xFF3158F5),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          _MiniInfo(
-                            icon: Icons.event_seat_outlined,
-                            text: 'Siège : ${passenger.siege}',
-                          ),
-                          const SizedBox(height: 6),
-                          _MiniInfo(
-                            icon: Icons.badge_outlined,
-                            text: 'Billet : ${passenger.billetId}',
-                          ),
-                          const SizedBox(height: 6),
-                          _MiniInfo(
-                            icon: Icons.receipt_long_outlined,
-                            text: 'Réservation : ${passenger.reservationId}',
-                          ),
-                          if (passenger.clientResponsable.trim().isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            _MiniInfo(
-                              icon: Icons.person_outline_rounded,
-                              text:
-                                  'Responsable : ${passenger.clientResponsable}',
-                            ),
-                          ],
-                          const SizedBox(height: 14),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 48,
-                            child: ElevatedButton(
-                              onPressed: passenger.present
-                                  ? null
-                                  : () => markPresent(passenger),
-                              child: Text(
-                                passenger.present
-                                    ? 'Déjà présent'
-                                    : 'Client présent',
-                              ),
+
+                if (waitingPassengers.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: theme.cardColor,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(
+                          Icons.check_circle_rounded,
+                          color: Color(0xFF10B981),
+                        ),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Tous les clients ont été marqués présents.',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF374151),
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  ...waitingPassengers.map(
+                    (passenger) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _buildPassengerCard(
+                        passenger,
+                        theme,
                       ),
                     ),
                   ),
-                ),
               ],
             ],
           ),
@@ -394,7 +1403,27 @@ class _ChauffeurTripPassengersScreenState
       ),
     );
   }
+
+  String _cleanError(Object error) {
+    return error.toString().replaceAll('Exception: ', '').trim();
+  }
+
+  void _showMessage(String message) {
+    if (!mounted || message.trim().isEmpty) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+        ),
+      );
+  }
 }
+
+// ============================================================
+// WIDGETS
+// ============================================================
 
 class _InfoRow extends StatelessWidget {
   final String label;
@@ -407,11 +1436,15 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final safeValue = value.trim().isEmpty ? '-' : value;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
+            flex: 4,
             child: Text(
               label,
               style: const TextStyle(
@@ -420,15 +1453,72 @@ class _InfoRow extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(width: 12),
           Expanded(
+            flex: 6,
             child: Text(
-              value.isEmpty ? '-' : value,
+              safeValue,
               textAlign: TextAlign.right,
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: Color(0xFF374151),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CounterBox extends StatelessWidget {
+  final String label;
+  final int value;
+  final IconData icon;
+  final Color color;
+
+  const _CounterBox({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 12,
+      ),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            size: 22,
+            color: color,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '$value',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Color(0xFF6B7280),
             ),
           ),
         ],
@@ -449,8 +1539,13 @@ class _MiniInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 16, color: const Color(0xFF9CA3AF)),
+        Icon(
+          icon,
+          size: 17,
+          color: const Color(0xFF9CA3AF),
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
@@ -478,7 +1573,10 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 6,
+      ),
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(999),
@@ -490,6 +1588,144 @@ class _StatusBadge extends StatelessWidget {
           fontWeight: FontWeight.w700,
           color: color,
         ),
+      ),
+    );
+  }
+}
+
+class _PresentPassengerTile extends StatelessWidget {
+  final ChauffeurPassengerModel passenger;
+
+  const _PresentPassengerTile({
+    required this.passenger,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final passengerName = passenger.passagerNom.trim().isEmpty
+        ? 'Passager'
+        : passenger.passagerNom;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFF10B981).withOpacity(0.25),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B981).withOpacity(0.10),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_rounded,
+              color: Color(0xFF10B981),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              passengerName,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF374151),
+              ),
+            ),
+          ),
+          Text(
+            passenger.siege,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF10B981),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorText extends StatelessWidget {
+  final String message;
+
+  const _ErrorText({
+    required this.message,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(
+          Icons.error_outline_rounded,
+          size: 18,
+          color: Colors.redAccent,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            message,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Colors.redAccent,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ErrorCard extends StatelessWidget {
+  final String message;
+  final Future<void> Function() onRetry;
+
+  const _ErrorCard({
+    required this.message,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 44,
+            color: Colors.redAccent,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Color(0xFF6B7280),
+            ),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Réessayer'),
+          ),
+        ],
       ),
     );
   }
