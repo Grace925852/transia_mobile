@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
+import 'package:transia_mobile/core/network/self_service.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/chauffeur/models/chauffeur_trip_model.dart';
 import 'package:transia_mobile/features/chauffeur/services/chauffeur_service.dart';
+import 'package:transia_mobile/shared/widgets/user_avatar.dart';
 
 class ChauffeurProfileScreen extends StatefulWidget {
   const ChauffeurProfileScreen({super.key});
@@ -18,10 +20,12 @@ class _ChauffeurProfileScreenState extends State<ChauffeurProfileScreen> {
 
   late final ApiClient apiClient;
   late final ChauffeurService chauffeurService;
+  late final SelfService selfService;
 
   bool isLoading = true;
   String fullName = 'Chauffeur';
   String username = '';
+  String? photoBase64;
   List<ChauffeurTripModel> allTrips = [];
 
   @override
@@ -29,6 +33,7 @@ class _ChauffeurProfileScreenState extends State<ChauffeurProfileScreen> {
     super.initState();
     apiClient = ApiClient(storage);
     chauffeurService = ChauffeurService(apiClient: apiClient);
+    selfService = SelfService(apiClient: apiClient);
     chargerDonnees();
   }
 
@@ -39,14 +44,16 @@ class _ChauffeurProfileScreenState extends State<ChauffeurProfileScreen> {
 
     try {
       final name = await storage.getFullName();
-      final phone = await storage.getUsername();
+      final phone = await storage.getTelephone();
       final trips = await chauffeurService.getTrips();
+      final profil = await selfService.getMyProfil();
 
       if (!mounted) return;
 
       setState(() {
         fullName = (name != null && name.trim().isNotEmpty) ? name : 'Chauffeur';
         username = phone ?? '';
+        photoBase64 = profil?.photoProfil;
         allTrips = trips;
         isLoading = false;
       });
@@ -70,7 +77,7 @@ class _ChauffeurProfileScreenState extends State<ChauffeurProfileScreen> {
   Future<void> logout() async {
     await storage.clearSession();
     if (!mounted) return;
-    context.go(AppRoutes.chauffeurLogin);
+    context.go(AppRoutes.login);
   }
 
   DateTime? _parseTripDate(ChauffeurTripModel trip) {
@@ -131,17 +138,11 @@ class _ChauffeurProfileScreenState extends State<ChauffeurProfileScreen> {
                 ),
                 child: Column(
                   children: [
-                    CircleAvatar(
+                    UserAvatar(
+                      photoBase64: photoBase64,
+                      initiales: initiales,
                       radius: 34,
-                      backgroundColor: const Color(0xFF3158F5),
-                      child: Text(
-                        initiales,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                      fontSize: 22,
                     ),
                     const SizedBox(height: 14),
                     Text(
@@ -269,6 +270,15 @@ class _ChauffeurProfileScreenState extends State<ChauffeurProfileScreen> {
                     ),
                   ),
                 ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 54,
+                child: OutlinedButton.icon(
+                  onPressed: () => context.push(AppRoutes.editProfile),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Modifier mon profil'),
+                ),
+              ),
               const SizedBox(height: 12),
               SizedBox(
                 height: 54,

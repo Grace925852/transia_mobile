@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
@@ -12,8 +13,7 @@ class TrackingListScreen extends StatefulWidget {
   const TrackingListScreen({super.key});
 
   @override
-  State<TrackingListScreen> createState() =>
-      _TrackingListScreenState();
+  State<TrackingListScreen> createState() => _TrackingListScreenState();
 }
 
 class _TrackingListScreenState extends State<TrackingListScreen> {
@@ -27,7 +27,7 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
 
   List<ReservationModel> reservations = [];
 
-  AppPreferencesController get prefs =>
+  AppPreferencesController get preferences =>
       AppPreferencesController.instance;
 
   @override
@@ -52,7 +52,7 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
     required String es,
     required String ar,
   }) {
-    return prefs.tr(
+    return preferences.tr(
       fr: fr,
       en: en,
       es: es,
@@ -72,136 +72,140 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
       final numericUserIdText =
           await secureStorageService.getNumericUserId();
 
-      final username =
-          await secureStorageService.getUsername() ?? '';
+      final fullName =
+          await secureStorageService.getFullName() ?? '';
 
-      /*
-       * Si ton SecureStorageService possède getFullName(),
-       * cette valeur sera utilisée. Sinon, le username sert
-       * aussi de valeur de secours.
-       */
-      String fullName = username;
-
-      try {
-        final dynamic storage = secureStorageService;
-        final dynamic storedFullName =
-            await storage.getFullName();
-
-        if (storedFullName != null &&
-            storedFullName.toString().trim().isNotEmpty) {
-          fullName = storedFullName.toString().trim();
-        }
-      } catch (_) {
-        // getFullName n'existe peut-être pas dans le service.
-        // Le username reste utilisé comme solution de secours.
-      }
+      final telephone =
+          await secureStorageService.getTelephone() ?? '';
 
       final userId =
-          int.tryParse(numericUserIdText ?? '') ?? 0;
+          int.tryParse(numericUserIdText?.trim() ?? '') ?? 0;
 
-      final results =
+      debugPrint(
+        'TRACKING SESSION => '
+        'userId=$userId, '
+        'fullName=$fullName, '
+        'telephone=$telephone',
+      );
+
+      final myReservations =
           await reservationService.getMyReservations(
         userId: userId,
         fullName: fullName,
-        username: username,
+        username: telephone,
       );
 
-      final localPaidIds =
+      final localPaidReservationIds =
           await paymentStatusService.getPaidReservationIds();
 
-      final filtered = results.where((reservation) {
-        final paidFromBackend =
-            reservation.isPaidOrValidated;
+      final visibleReservations = myReservations.where(
+        (reservation) {
+          final paidFromBackend =
+              reservation.isPaidOrValidated;
 
-        final paidLocally =
-            localPaidIds.contains(reservation.id);
+          final paidLocally =
+              localPaidReservationIds.contains(
+            reservation.id,
+          );
 
-        final isPaid =
-            paidFromBackend || paidLocally;
+          final isPaid =
+              paidFromBackend || paidLocally;
 
-        final isUnavailable =
-            reservation.isCancelled ||
-            reservation.isRefunded ||
-            reservation.isRefundRequested;
+          final isUnavailable =
+              reservation.isCancelled ||
+              reservation.isRefunded ||
+              reservation.isRefundRequested;
 
-        final departure =
-            reservation.departureDateTime;
+          final hasTrip =
+              reservation.trajetId.trim().isNotEmpty;
 
-        if (!isPaid || isUnavailable) {
-          return false;
-        }
+          final departure =
+              reservation.departureDateTime;
 
-        if (reservation.trajetId.trim().isEmpty) {
-          return false;
-        }
+          debugPrint(
+            'TRACKING CHECK => '
+            'reservationId=${reservation.id}, '
+            'trajetId=${reservation.trajetId}, '
+            'statut=${reservation.statut}, '
+            'backendPaid=$paidFromBackend, '
+            'localPaid=$paidLocally, '
+            'unavailable=$isUnavailable, '
+            'departure=$departure',
+          );
 
-        if (departure == null) {
+          if (!isPaid) {
+            return false;
+          }
+
+          if (isUnavailable) {
+            return false;
+          }
+
+          if (!hasTrip) {
+            return false;
+          }
+
           /*
-           * On conserve quand même la réservation si elle
-           * est payée, même si la date n'a pas été correctement
-           * reconstruite depuis le backend.
+           * Si la date du trajet n’a pas pu être reconstruite,
+           * la réservation reste visible puisqu’elle est payée.
            */
-          return true;
-        }
+          if (departure == null) {
+            return true;
+          }
 
-        /*
-         * Le trajet reste visible pendant 24 heures après
-         * l'heure prévue de départ.
-         *
-         * Cela permet au client de suivre un trajet en cours,
-         * même lorsque l'heure prévue est déjà dépassée.
-         */
-        final trackingVisibilityLimit = departure.add(
-          const Duration(hours: 24),
-        );
+          /*
+           * Le trajet reste visible :
+           * - avant son départ ;
+           * - pendant son déroulement ;
+           * - jusqu’à 24 heures après l’heure prévue.
+           *
+           * Cela permet au client de consulter un trajet en cours
+           * même après l’heure initialement programmée.
+           */
+          final trackingVisibilityLimit = departure.add(
+            const Duration(hours: 24),
+          );
 
-        return DateTime.now().isBefore(
-          trackingVisibilityLimit,
-        );
-      }).toList();
+          return DateTime.now().isBefore(
+            trackingVisibilityLimit,
+          );
+        },
+      ).toList();
 
-      filtered.sort((a, b) {
-        final first =
-            a.departureDateTime ?? DateTime(2100);
+      visibleReservations.sort(
+        (firstReservation, secondReservation) {
+          final firstDate =
+              firstReservation.departureDateTime ??
+              DateTime(2100);
 
-        final second =
-            b.departureDateTime ?? DateTime(2100);
+          final secondDate =
+              secondReservation.departureDateTime ??
+              DateTime(2100);
 
-        return first.compareTo(second);
-      });
-
-      debugPrint(
-        'TRACKING CLIENT => '
-        'userId=$userId, '
-        'username=$username, '
-        'fullName=$fullName, '
-        'all=${results.length}, '
-        'localPaid=${localPaidIds.length}, '
-        'visible=${filtered.length}',
+          return firstDate.compareTo(secondDate);
+        },
       );
 
-      for (final reservation in results) {
-        debugPrint(
-          'TRACKING CHECK => '
-          'id=${reservation.id}, '
-          'trajetId=${reservation.trajetId}, '
-          'statut=${reservation.statut}, '
-          'backendPaid=${reservation.isPaidOrValidated}, '
-          'localPaid=${localPaidIds.contains(reservation.id)}, '
-          'date=${reservation.dateDepart}, '
-          'heure=${reservation.heureDepart}',
-        );
-      }
+      debugPrint(
+        'TRACKING RESULT => '
+        'myReservations=${myReservations.length}, '
+        'localPaid=${localPaidReservationIds.length}, '
+        'visible=${visibleReservations.length}',
+      );
 
       if (!mounted) return;
 
       setState(() {
-        reservations = filtered;
+        reservations = visibleReservations;
         isLoading = false;
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
       debugPrint(
         'TRACKING LIST ERROR = $error',
+      );
+
+      debugPrint(
+        'TRACKING LIST STACKTRACE = $stackTrace',
       );
 
       if (!mounted) return;
@@ -224,7 +228,9 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
       return false;
     }
 
-    return !DateTime.now().isBefore(departure);
+    return !DateTime.now().isBefore(
+      departure,
+    );
   }
 
   Future<void> _openTracking(
@@ -240,6 +246,13 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
     await loadTrackingReservations();
   }
 
+  String _cleanError(Object error) {
+    return error
+        .toString()
+        .replaceAll('Exception: ', '')
+        .trim();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -248,7 +261,7 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
         theme.textTheme.titleLarge?.color ??
         const Color(0xFF374151);
 
-    final mutedColor =
+    final secondaryTextColor =
         theme.textTheme.bodyMedium?.color ??
         const Color(0xFF6B7280);
 
@@ -258,13 +271,12 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
         child: RefreshIndicator(
           onRefresh: loadTrackingReservations,
           child: ListView(
-            physics:
-                const AlwaysScrollableScrollPhysics(),
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(
               18,
-              22,
+              26,
               18,
-              28,
+              32,
             ),
             children: [
               Text(
@@ -295,10 +307,10 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
                 style: TextStyle(
                   fontSize: 14,
                   height: 1.4,
-                  color: mutedColor,
+                  color: secondaryTextColor,
                 ),
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 24),
 
               if (isLoading)
                 const SizedBox(
@@ -308,15 +320,18 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
                   ),
                 )
               else if (errorMessage != null)
-                _TrackingListError(
+                _TrackingErrorCard(
                   message: errorMessage!,
                   onRetry: loadTrackingReservations,
                 )
               else if (reservations.isEmpty)
-                _EmptyTrackingList(
-                  theme: theme,
-                  titleColor: titleColor,
-                  mutedColor: mutedColor,
+                _EmptyTrackingCard(
+                  title: tr(
+                    fr: 'Aucun trajet à suivre',
+                    en: 'No trip to track',
+                    es: 'No hay viajes para seguir',
+                    ar: 'لا توجد رحلة لتتبعها',
+                  ),
                   message: tr(
                     fr:
                         'Aucun trajet payé à suivre pour le moment.',
@@ -340,7 +355,9 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
                         hasStarted:
                             _hasStarted(reservation),
                         onTap: () {
-                          _openTracking(reservation);
+                          _openTracking(
+                            reservation,
+                          );
                         },
                       ),
                     );
@@ -351,13 +368,6 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
         ),
       ),
     );
-  }
-
-  String _cleanError(Object error) {
-    return error
-        .toString()
-        .replaceAll('Exception: ', '')
-        .trim();
   }
 }
 
@@ -384,6 +394,19 @@ class _TrackingReservationCard extends StatelessWidget {
         ? 'Départ effectué ou imminent'
         : 'À venir';
 
+    final routeLabel =
+        reservation.trajetLabel.trim().isEmpty
+        ? 'Trajet non renseigné'
+        : reservation.trajetLabel;
+
+    final vehicleLabel =
+        reservation.vehiculeImmatriculation
+                .trim()
+                .isEmpty
+            ? 'Véhicule non renseigné'
+            : reservation
+                  .vehiculeImmatriculation;
+
     return Material(
       color: theme.cardColor,
       borderRadius: BorderRadius.circular(24),
@@ -402,11 +425,14 @@ class _TrackingReservationCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      reservation.trajetLabel,
+                      routeLabel,
                       style: const TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF374151),
+                        fontWeight:
+                            FontWeight.w700,
+                        color: Color(
+                          0xFF374151,
+                        ),
                       ),
                     ),
                   ),
@@ -418,16 +444,19 @@ class _TrackingReservationCard extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color:
-                          statusColor.withOpacity(0.10),
+                      color: statusColor
+                          .withOpacity(0.10),
                       borderRadius:
-                          BorderRadius.circular(999),
+                          BorderRadius.circular(
+                        999,
+                      ),
                     ),
                     child: Text(
                       statusLabel,
                       style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                        fontWeight:
+                            FontWeight.w700,
                         color: statusColor,
                       ),
                     ),
@@ -435,35 +464,48 @@ class _TrackingReservationCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
-              _SmallTrackingRow(
+              _TrackingInformationRow(
                 icon:
                     Icons.calendar_today_outlined,
-                value: reservation.dateDepart,
+                value:
+                    reservation.dateDepart.trim().isEmpty
+                    ? '-'
+                    : reservation.dateDepart,
               ),
-              const SizedBox(height: 9),
-              _SmallTrackingRow(
-                icon: Icons.access_time_rounded,
-                value: reservation.heureFormatee,
+              const SizedBox(height: 10),
+              _TrackingInformationRow(
+                icon:
+                    Icons.access_time_rounded,
+                value:
+                    reservation.heureFormatee
+                            .trim()
+                            .isEmpty
+                    ? '-'
+                    : reservation
+                          .heureFormatee,
               ),
-              const SizedBox(height: 9),
-              _SmallTrackingRow(
+              const SizedBox(height: 10),
+              _TrackingInformationRow(
                 icon:
                     Icons.directions_bus_outlined,
-                value: reservation
-                        .vehiculeImmatriculation
-                        .trim()
-                        .isEmpty
-                    ? 'Véhicule non renseigné'
-                    : reservation
-                        .vehiculeImmatriculation,
+                value: vehicleLabel,
               ),
-              const Divider(height: 28),
+              const SizedBox(height: 10),
+              _TrackingInformationRow(
+                icon:
+                    Icons.airline_seat_recline_normal_rounded,
+                value:
+                    '${reservation.nombrePlace} place${reservation.nombrePlace > 1 ? 's' : ''}',
+              ),
+              const Divider(height: 30),
               const Row(
                 children: [
                   Icon(
                     Icons.location_on_rounded,
                     size: 20,
-                    color: Color(0xFF3158F5),
+                    color: Color(
+                      0xFF3158F5,
+                    ),
                   ),
                   SizedBox(width: 8),
                   Expanded(
@@ -471,15 +513,21 @@ class _TrackingReservationCard extends StatelessWidget {
                       'Consulter le suivi',
                       style: TextStyle(
                         fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF3158F5),
+                        fontWeight:
+                            FontWeight.w700,
+                        color: Color(
+                          0xFF3158F5,
+                        ),
                       ),
                     ),
                   ),
                   Icon(
-                    Icons.arrow_forward_ios_rounded,
+                    Icons
+                        .arrow_forward_ios_rounded,
                     size: 16,
-                    color: Color(0xFF3158F5),
+                    color: Color(
+                      0xFF3158F5,
+                    ),
                   ),
                 ],
               ),
@@ -491,11 +539,12 @@ class _TrackingReservationCard extends StatelessWidget {
   }
 }
 
-class _SmallTrackingRow extends StatelessWidget {
+class _TrackingInformationRow
+    extends StatelessWidget {
   final IconData icon;
   final String value;
 
-  const _SmallTrackingRow({
+  const _TrackingInformationRow({
     required this.icon,
     required this.value,
   });
@@ -503,19 +552,25 @@ class _SmallTrackingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
+      crossAxisAlignment:
+          CrossAxisAlignment.start,
       children: [
         Icon(
           icon,
           size: 19,
-          color: const Color(0xFF9CA3AF),
+          color: const Color(
+            0xFF9CA3AF,
+          ),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
-            value.trim().isEmpty ? '-' : value,
+            value,
             style: const TextStyle(
               fontSize: 14,
-              color: Color(0xFF6B7280),
+              color: Color(
+                0xFF6B7280,
+              ),
             ),
           ),
         ),
@@ -524,32 +579,35 @@ class _SmallTrackingRow extends StatelessWidget {
   }
 }
 
-class _EmptyTrackingList extends StatelessWidget {
-  final ThemeData theme;
-  final Color titleColor;
-  final Color mutedColor;
+class _EmptyTrackingCard extends StatelessWidget {
+  final String title;
   final String message;
 
-  const _EmptyTrackingList({
-    required this.theme,
-    required this.titleColor,
-    required this.mutedColor,
+  const _EmptyTrackingCard({
+    required this.title,
     required this.message,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
-      padding: const EdgeInsets.all(28),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 24,
+        vertical: 34,
+      ),
       decoration: BoxDecoration(
         color: theme.cardColor,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius:
+            BorderRadius.circular(24),
       ),
       child: Column(
         children: [
           Container(
-            width: 74,
-            height: 74,
+            width: 76,
+            height: 76,
             decoration: BoxDecoration(
               color: const Color(
                 0xFF3158F5,
@@ -559,26 +617,33 @@ class _EmptyTrackingList extends StatelessWidget {
             child: const Icon(
               Icons.location_off_outlined,
               size: 38,
-              color: Color(0xFF3158F5),
+              color: Color(
+                0xFF3158F5,
+              ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
           Text(
-            'Aucun trajet à suivre',
-            style: TextStyle(
-              fontSize: 18,
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 19,
               fontWeight: FontWeight.w700,
-              color: titleColor,
+              color: Color(
+                0xFF374151,
+              ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 9),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 14,
-              height: 1.4,
-              color: mutedColor,
+              height: 1.45,
+              color: Color(
+                0xFF6B7280,
+              ),
             ),
           ),
         ],
@@ -587,22 +652,26 @@ class _EmptyTrackingList extends StatelessWidget {
   }
 }
 
-class _TrackingListError extends StatelessWidget {
+class _TrackingErrorCard extends StatelessWidget {
   final String message;
   final Future<void> Function() onRetry;
 
-  const _TrackingListError({
+  const _TrackingErrorCard({
     required this.message,
     required this.onRetry,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(24),
+        color: theme.cardColor,
+        borderRadius:
+            BorderRadius.circular(24),
       ),
       child: Column(
         children: [
@@ -617,16 +686,23 @@ class _TrackingListError extends StatelessWidget {
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 14,
-              color: Color(0xFF6B7280),
+              height: 1.4,
+              color: Color(
+                0xFF6B7280,
+              ),
             ),
           ),
           const SizedBox(height: 18),
           OutlinedButton.icon(
-            onPressed: onRetry,
+            onPressed: () {
+              onRetry();
+            },
             icon: const Icon(
               Icons.refresh_rounded,
             ),
-            label: const Text('Réessayer'),
+            label: const Text(
+              'Réessayer',
+            ),
           ),
         ],
       ),

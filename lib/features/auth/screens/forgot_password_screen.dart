@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:transia_mobile/core/network/api_client.dart';
+import 'package:transia_mobile/core/storage/secure_storage_service.dart';
+import 'package:transia_mobile/features/auth/services/auth_service.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -15,14 +18,29 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   final TextEditingController phoneController = TextEditingController();
 
+  late final AuthService authService;
+  bool isLoading = false;
+  bool demandeEnvoyee = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final storage = SecureStorageService();
+    authService = AuthService(
+      apiClient: ApiClient(storage),
+      secureStorageService: storage,
+    );
+  }
+
   @override
   void dispose() {
     phoneController.dispose();
     super.dispose();
   }
 
-  void sendCode() {
-    if (phoneController.text.trim().isEmpty) {
+  Future<void> sendCode() async {
+    final telephone = phoneController.text.trim();
+    if (telephone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Veuillez saisir votre numéro de téléphone.'),
@@ -31,11 +49,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Code de réinitialisation envoyé.'),
-      ),
-    );
+    setState(() => isLoading = true);
+
+    try {
+      await authService.forgotPassword(telephone: telephone);
+      if (!mounted) return;
+      setState(() => demandeEnvoyee = true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
   }
 
   @override
@@ -106,7 +133,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Recevez un code pour récupérer votre compte',
+            'Récupérez l\'accès à votre compte',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white70,
@@ -143,7 +170,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               borderRadius: BorderRadius.circular(30),
             ),
             child: Icon(
-              Icons.lock_reset_rounded,
+              demandeEnvoyee ? Icons.mark_email_read_rounded : Icons.lock_reset_rounded,
               color: primaryBlue,
               size: 54,
             ),
@@ -151,104 +178,137 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
           const SizedBox(height: 24),
 
-          Text(
-            'Récupération du compte',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 27,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          Text(
-            'Entrez votre numéro de téléphone. Nous vous enverrons un code de vérification.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: textColor.withOpacity(0.62),
-              fontSize: 17,
-              height: 1.4,
-            ),
-          ),
-
-          const SizedBox(height: 30),
-
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Numéro de téléphone',
+          if (!demandeEnvoyee) ...[
+            Text(
+              'Récupération du compte',
+              textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 18,
-                color: textColor.withOpacity(0.78),
+                color: textColor,
+                fontSize: 27,
                 fontWeight: FontWeight.w500,
               ),
             ),
-          ),
 
-          const SizedBox(height: 8),
+            const SizedBox(height: 12),
 
-          Container(
-            height: 64,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF6F7FB),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: const Color(0xFFE5E7EB),
+            Text(
+              'Entrez votre numéro de téléphone. Si un e-mail est associé à votre compte, un lien de réinitialisation vous y sera envoyé.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: textColor.withOpacity(0.62),
+                fontSize: 17,
+                height: 1.4,
               ),
             ),
-            child: TextField(
-              controller: phoneController,
-              keyboardType: TextInputType.phone,
-              style: const TextStyle(
-                fontSize: 20,
-                color: Color(0xFF111827),
-              ),
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                hintText: 'Ex : 90 00 00 00',
-                hintStyle: TextStyle(
-                  fontSize: 18,
-                  color: Color(0xFF9CA3AF),
-                ),
-                prefixIcon: Icon(
-                  Icons.phone_outlined,
-                  color: Color(0xFF9CA3AF),
-                  size: 26,
-                ),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 17,
-                ),
-              ),
-            ),
-          ),
 
-          const SizedBox(height: 28),
+            const SizedBox(height: 30),
 
-          SizedBox(
-            width: double.infinity,
-            height: 66,
-            child: ElevatedButton(
-              onPressed: sendCode,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryBlue,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(22),
-                ),
-              ),
-              child: const Text(
-                'Envoyer le code',
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Numéro de téléphone',
                 style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                  color: textColor.withOpacity(0.78),
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ),
-          ),
+
+            const SizedBox(height: 8),
+
+            Container(
+              height: 64,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF6F7FB),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: const Color(0xFFE5E7EB),
+                ),
+              ),
+              child: TextField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                enabled: !isLoading,
+                style: const TextStyle(
+                  fontSize: 20,
+                  color: Color(0xFF111827),
+                ),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: 'Ex : 90 00 00 00',
+                  hintStyle: TextStyle(
+                    fontSize: 18,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                  prefixIcon: Icon(
+                    Icons.phone_outlined,
+                    color: Color(0xFF9CA3AF),
+                    size: 26,
+                  ),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 17,
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 28),
+
+            SizedBox(
+              width: double.infinity,
+              height: 66,
+              child: ElevatedButton(
+                onPressed: isLoading ? null : sendCode,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryBlue,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                ),
+                child: isLoading
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.6,
+                        ),
+                      )
+                    : const Text(
+                        'Envoyer la demande',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+              ),
+            ),
+          ] else ...[
+            Text(
+              'Demande envoyée',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: textColor,
+                fontSize: 27,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Si un e-mail est associé à ce numéro, un lien de réinitialisation vient de vous être envoyé. '
+              'Sinon, contactez une agence pour réinitialiser votre mot de passe.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: textColor.withOpacity(0.62),
+                fontSize: 17,
+                height: 1.4,
+              ),
+            ),
+          ],
 
           const SizedBox(height: 18),
 

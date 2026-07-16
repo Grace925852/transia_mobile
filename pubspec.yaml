@@ -36,6 +36,9 @@ dependencies:
   qr_flutter: ^4.1.0
   mobile_scanner: ^6.0.6
 
+  # Sélection de photo (profil)
+  image_picker: ^1.1.2
+
   # GPS / Maps
   geolocator: ^13.0.2
   geocoding: ^5.0.0

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
+import 'package:transia_mobile/features/client/screens/client_colis_list_screen.dart';
 import 'package:transia_mobile/features/client/screens/client_home_screen.dart';
 import 'package:transia_mobile/features/client/screens/profile_screen.dart';
 import 'package:transia_mobile/features/client/screens/reservations_screen.dart';
@@ -30,6 +31,7 @@ class _ClientMainScreenState extends State<ClientMainScreen> {
     pages = const [
       ClientHomeScreen(showScaffold: false),
       ReservationsScreen(),
+      ClientColisListScreen(),
       TrackingListScreen(),
       ProfileScreen(),
     ];
@@ -65,8 +67,8 @@ class _ClientMainScreenState extends State<ClientMainScreen> {
                 color: navTheme.backgroundColor ?? theme.cardColor,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(
-                      theme.brightness == Brightness.dark ? 0.22 : 0.07,
+                    color: Colors.black.withValues(
+                      alpha: theme.brightness == Brightness.dark ? 0.22 : 0.07,
                     ),
                     blurRadius: 14,
                     offset: const Offset(0, -3),
@@ -107,6 +109,16 @@ class _ClientMainScreenState extends State<ClientMainScreen> {
                       en: 'Bookings',
                       es: 'Reserv.',
                       ar: 'الحجوزات',
+                    ),
+                  ),
+                  BottomNavigationBarItem(
+                    icon: const Icon(Icons.inventory_2_outlined),
+                    activeIcon: const Icon(Icons.inventory_2_rounded),
+                    label: tr(
+                      fr: 'Colis',
+                      en: 'Parcels',
+                      es: 'Paquetes',
+                      ar: 'الطرود',
                     ),
                   ),
                   BottomNavigationBarItem(

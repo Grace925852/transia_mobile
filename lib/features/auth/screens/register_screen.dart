@@ -17,7 +17,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final Color textColor = const Color(0xFF374151);
 
   final TextEditingController fullNameController = TextEditingController();
-  final TextEditingController usernameController = TextEditingController();
+  final TextEditingController telephoneController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmPasswordController =
       TextEditingController();
@@ -44,7 +45,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void dispose() {
     fullNameController.dispose();
-    usernameController.dispose();
+    telephoneController.dispose();
+    emailController.dispose();
     passwordController.dispose();
     confirmPasswordController.dispose();
     super.dispose();
@@ -52,12 +54,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> register() async {
     final fullName = fullNameController.text.trim();
-    final username = usernameController.text.trim();
+    final telephone = telephoneController.text.trim();
+    final email = emailController.text.trim();
     final password = passwordController.text.trim();
     final confirmPassword = confirmPasswordController.text.trim();
 
     if (fullName.isEmpty ||
-        username.isEmpty ||
+        telephone.isEmpty ||
         password.isEmpty ||
         confirmPassword.isEmpty) {
       showMessage('Veuillez remplir tous les champs.');
@@ -74,7 +77,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       await authService.register(
         fullName: fullName,
-        username: username,
+        telephone: telephone,
+        email: email,
         password: password,
       );
 
@@ -190,10 +194,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   _label('Numéro de téléphone'),
                   const SizedBox(height: 7),
                   _AuthField(
-                    controller: usernameController,
+                    controller: telephoneController,
                     hintText: 'Ex : 90000000',
                     icon: Icons.phone_outlined,
                     keyboardType: TextInputType.phone,
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  _label('E-mail (optionnel)'),
+                  const SizedBox(height: 7),
+                  _AuthField(
+                    controller: emailController,
+                    hintText: 'Pour récupérer votre mot de passe',
+                    icon: Icons.mail_outline_rounded,
+                    keyboardType: TextInputType.emailAddress,
                   ),
 
                   const SizedBox(height: 15),

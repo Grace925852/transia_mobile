@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
+import 'package:transia_mobile/core/network/self_service.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/chauffeur/models/chauffeur_trip_model.dart';
 import 'package:transia_mobile/features/chauffeur/services/chauffeur_service.dart';
+import 'package:transia_mobile/shared/widgets/user_avatar.dart';
 
 class ChauffeurHomeScreen extends StatefulWidget {
   const ChauffeurHomeScreen({super.key});
@@ -17,10 +19,12 @@ class _ChauffeurHomeScreenState extends State<ChauffeurHomeScreen> {
   late final SecureStorageService secureStorageService;
   late final ApiClient apiClient;
   late final ChauffeurService chauffeurService;
+  late final SelfService selfService;
 
   bool isLoading = true;
   String chauffeurName = 'Chauffeur';
   String chauffeurPhone = '';
+  String? photoBase64;
 
   List<ChauffeurTripModel> allTrips = [];
   List<ChauffeurTripModel> upcomingTrips = [];
@@ -34,6 +38,7 @@ class _ChauffeurHomeScreenState extends State<ChauffeurHomeScreen> {
     secureStorageService = SecureStorageService();
     apiClient = ApiClient(secureStorageService);
     chauffeurService = ChauffeurService(apiClient: apiClient);
+    selfService = SelfService(apiClient: apiClient);
     chargerDonnees();
   }
 
@@ -64,8 +69,9 @@ class _ChauffeurHomeScreenState extends State<ChauffeurHomeScreen> {
 
     try {
       final name = await secureStorageService.getFullName();
-      final phone = await secureStorageService.getUsername();
+      final phone = await secureStorageService.getTelephone();
       final result = await chauffeurService.getTrips();
+      final profil = await selfService.getMyProfil();
 
       result.sort((a, b) {
         final aDate = _tripDateTime(a) ?? DateTime(2100);
@@ -91,6 +97,7 @@ class _ChauffeurHomeScreenState extends State<ChauffeurHomeScreen> {
 
         chauffeurName = cleanName.isNotEmpty ? cleanName : (cleanPhone.isNotEmpty ? cleanPhone : 'Chauffeur');
         chauffeurPhone = cleanPhone;
+        photoBase64 = profil?.photoProfil;
         allTrips = result;
         upcomingTrips = filteredUpcoming;
         passengerCounts = counts;
@@ -181,17 +188,12 @@ class _ChauffeurHomeScreenState extends State<ChauffeurHomeScreen> {
                         ],
                       ),
                     ),
-                    CircleAvatar(
+                    UserAvatar(
+                      photoBase64: photoBase64,
+                      initiales: initiales,
                       radius: 30,
                       backgroundColor: Colors.white.withOpacity(0.16),
-                      child: Text(
-                        initiales,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                      fontSize: 20,
                     ),
                   ],
                 ),

@@ -16,7 +16,7 @@ class ReservationService {
 
   Future<String> _buildUserScopedKey(String baseKey) async {
     final numericUserId = await _secureStorageService.getNumericUserId();
-    final username = await _secureStorageService.getUsername();
+    final username = await _secureStorageService.getTelephone();
 
     if (numericUserId != null && numericUserId.trim().isNotEmpty) {
       return '${baseKey}_user_$numericUserId';

@@ -5,7 +5,8 @@ class SecureStorageService {
   static const String _userIdKey = 'user_id';
   static const String _numericUserIdKey = 'numeric_user_id';
   static const String _fullNameKey = 'full_name';
-  static const String _usernameKey = 'username';
+  static const String _telephoneKey = 'telephone';
+  static const String _rolesKey = 'user_roles';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
@@ -21,11 +22,11 @@ class SecureStorageService {
     required String userId,
     String? numericUserId,
     required String fullName,
-    required String username,
+    required String telephone,
   }) async {
     await _storage.write(key: _userIdKey, value: userId);
     await _storage.write(key: _fullNameKey, value: fullName);
-    await _storage.write(key: _usernameKey, value: username);
+    await _storage.write(key: _telephoneKey, value: telephone);
 
     if (numericUserId != null && numericUserId.trim().isNotEmpty) {
       await _storage.write(
@@ -59,8 +60,13 @@ class SecureStorageService {
     return await _storage.read(key: _fullNameKey);
   }
 
-  Future<String?> getUsername() async {
-    return await _storage.read(key: _usernameKey);
+  Future<String?> getTelephone() async {
+    return await _storage.read(key: _telephoneKey);
+  }
+
+  Future<void> updateProfileCache({String? fullName, String? telephone}) async {
+    if (fullName != null) await _storage.write(key: _fullNameKey, value: fullName);
+    if (telephone != null) await _storage.write(key: _telephoneKey, value: telephone);
   }
 
   Future<void> clearSession() async {
@@ -68,10 +74,27 @@ class SecureStorageService {
     await _storage.delete(key: _userIdKey);
     await _storage.delete(key: _numericUserIdKey);
     await _storage.delete(key: _fullNameKey);
-    await _storage.delete(key: _usernameKey);
+    await _storage.delete(key: _telephoneKey);
+    await _storage.delete(key: _rolesKey);
   }
 
   Future<void> deleteToken() async {
     await clearSession();
+  }
+
+  Future<void> saveRoles(List<String> roles) async {
+    await _storage.write(key: _rolesKey, value: roles.join(','));
+  }
+
+  Future<List<String>> getRoles() async {
+    final value = await _storage.read(key: _rolesKey);
+    if (value == null || value.isEmpty) return [];
+    return value.split(',').map((r) => r.trim().toUpperCase()).toList();
+  }
+
+  Future<bool> hasRole(String role) async {
+    final roles = await getRoles();
+    final target = role.toUpperCase();
+    return roles.any((r) => r == target || r == 'ROLE_$target');
   }
 }
