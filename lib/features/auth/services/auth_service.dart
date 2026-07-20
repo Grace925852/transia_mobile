@@ -31,23 +31,15 @@ class AuthService {
   }
 
   String _normalizeLoginError(DioException e) {
-    final rawMessage = _extractReadableError(e.response?.data).toLowerCase();
+    // 400 = message métier déjà rédigé côté backend (identifiants incorrects,
+    // tentatives restantes, verrouillage temporaire...) : on l'affiche tel quel.
+    if (e.response?.statusCode == 400) {
+      final message = _extractReadableError(e.response?.data);
+      if (message.trim().isNotEmpty) return message;
+    }
 
     if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
       return 'Numéro de téléphone ou mot de passe incorrect.';
-    }
-
-    if (rawMessage.contains('paramètres de connexion sont incorrectes') ||
-        rawMessage.contains('parametres de connexion sont incorrectes') ||
-        rawMessage.contains('connexion sont incorrectes') ||
-        rawMessage.contains('mot de passe incorrect') ||
-        rawMessage.contains('compte est bloqué') ||
-        rawMessage.contains('compte est inactif') ||
-        rawMessage.contains('bad credentials') ||
-        rawMessage.contains('login incorrect')) {
-      return rawMessage.contains('bloqué') || rawMessage.contains('inactif')
-          ? _extractReadableError(e.response?.data)
-          : 'Numéro de téléphone ou mot de passe incorrect.';
     }
 
     return 'Erreur de connexion au serveur.';
