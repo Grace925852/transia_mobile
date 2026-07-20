@@ -24,6 +24,9 @@ import 'package:transia_mobile/features/client/screens/client_colis_list_screen.
 import 'package:transia_mobile/features/client/screens/client_colis_form_screen.dart';
 import 'package:transia_mobile/features/client/screens/client_colis_detail_screen.dart';
 import 'package:transia_mobile/features/client/models/colis_model.dart';
+import 'package:transia_mobile/features/client/screens/agences_screen.dart';
+import 'package:transia_mobile/features/client/screens/agence_detail_screen.dart';
+import 'package:transia_mobile/features/client/models/agence_model.dart';
 import 'package:transia_mobile/features/livreur/screens/livreur_main_screen.dart';
 import 'package:transia_mobile/features/livreur/screens/livreur_colis_detail_screen.dart';
 import 'package:transia_mobile/features/livreur/models/livreur_colis_model.dart';
@@ -58,6 +61,9 @@ class AppRoutes {
   static const String clientColis = '/client-colis';
   static const String clientColisForm = '/client-colis/nouveau';
   static const String clientColisDetail = '/client-colis/detail';
+
+  static const String clientAgences = '/client-agences';
+  static const String clientAgenceDetail = '/client-agences/detail';
 }
 
 
@@ -201,6 +207,16 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.clientColisDetail,
       builder: (context, state) => ClientColisDetailScreen(
         colis: state.extra as ColisModel,
+      ),
+    ),
+    GoRoute(
+      path: AppRoutes.clientAgences,
+      builder: (context, state) => const AgencesScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.clientAgenceDetail,
+      builder: (context, state) => AgenceDetailScreen(
+        agence: state.extra as AgenceModel,
       ),
     ),
   ],

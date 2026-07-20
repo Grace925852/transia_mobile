@@ -12,6 +12,7 @@ class ApiConstants {
   static const String users = '/api/v1/users';
   static const String trajets = '/api/v1/trajet';
   static const String villes = '/api/v1/ville';
+  static const String agences = '/api/v1/agences';
   static const String reservations = '/api/v1/reservations';
   static const String paiements = '/api/v1/paiements';
   static const String feedback = '/api/v1/feedback';

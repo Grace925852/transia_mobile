@@ -407,6 +407,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               padding: EdgeInsets.zero,
               children: [
                 _buildTopSection(primaryBlue, textColor, isDark),
+                const SizedBox(height: 20),
+                _buildAgencesShortcut(primaryBlue, textColor, isDark),
                 const SizedBox(height: 24),
                 _buildSuggestionsSection(primaryBlue, textColor, isDark),
                 const SizedBox(height: 26),
@@ -591,6 +593,73 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAgencesShortcut(Color primaryBlue, Color textColor, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: GestureDetector(
+        onTap: () => context.push(AppRoutes.clientAgences),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: primaryBlue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.store_rounded, color: primaryBlue, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tr(
+                        fr: 'Nos Agences',
+                        en: 'Our Agencies',
+                        es: 'Nuestras Agencias',
+                        ar: 'وكالاتنا',
+                      ),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      tr(
+                        fr: 'Trouvez un point de service près de vous',
+                        en: 'Find a service point near you',
+                        es: 'Encuentre un punto de servicio cerca de usted',
+                        ar: 'اعثر على نقطة خدمة بالقرب منك',
+                      ),
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: Color(0xFF9CA3AF)),
+            ],
+          ),
+        ),
       ),
     );
   }
