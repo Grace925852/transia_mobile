@@ -3,6 +3,7 @@ class TrajetModel {
   final String villeDepart;
   final String villeArrivee;
   final String vehiculeImmatriculation;
+  final String? vehiculeImage;
   final double distance;
   final String dureeEstimee;
   final double tarif;
@@ -16,6 +17,7 @@ class TrajetModel {
     required this.villeDepart,
     required this.villeArrivee,
     required this.vehiculeImmatriculation,
+    required this.vehiculeImage,
     required this.distance,
     required this.dureeEstimee,
     required this.tarif,
@@ -63,6 +65,9 @@ class TrajetModel {
           : json['vehiculeImmatriculation']?.toString() ??
               json['immatriculation']?.toString() ??
               '',
+      vehiculeImage: vehiculeData is Map
+          ? vehiculeData['image']?.toString()
+          : json['vehiculeImage']?.toString(),
       distance: double.tryParse(json['distance']?.toString() ?? '0') ?? 0,
       dureeEstimee: json['dureeEstimee']?.toString() ?? '',
       tarif: double.tryParse(json['tarif']?.toString() ?? '0') ?? 0,
@@ -72,6 +77,9 @@ class TrajetModel {
       capacite: parsedCapacite,
     );
   }
+
+  bool get aPhotoVehicule =>
+      vehiculeImage != null && vehiculeImage!.trim().isNotEmpty;
 
   String get prixFormate {
     return '${tarif.toStringAsFixed(0)} FCFA';

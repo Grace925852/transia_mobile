@@ -1,6 +1,6 @@
 class ReservationModel {
   final String id;
-  final int userId;
+  final String? userId;
   final String clientNom;
   final String trajetId;
   final String villeDepart;
@@ -40,6 +40,13 @@ class ReservationModel {
     final dynamic userData =
         json['user'] ?? json['users'] ?? json['client'] ?? json['utilisateur'];
 
+    // Le backend enrichit désormais la réservation avec le trajet complet (villes, véhicule, tarif) :
+    // on l'utilise en priorité, avec repli sur un trajetData fourni séparément pour compatibilité.
+    final Map<String, dynamic>? effectiveTrajetData =
+        json['trajet'] is Map
+            ? Map<String, dynamic>.from(json['trajet'] as Map)
+            : trajetData;
+
     final dynamic billetsData =
         json['billets'] ??
         json['tickets'] ??
@@ -54,19 +61,11 @@ class ReservationModel {
 
     final int safeNombrePlace = parsedNombrePlace > 0 ? parsedNombrePlace : 1;
 
-    final int parsedUserId =
-        int.tryParse(
-          (userData is Map
-                      ? (userData['id'] ??
-                          userData['userId'] ??
-                          userData['numericId'])
-                      : (json['userId'] ??
-                          json['clientId'] ??
-                          json['utilisateurId']))
-                  ?.toString() ??
-              '0',
-        ) ??
-        0;
+    // userId est l'UUID (publicId) du titulaire renvoyé par le backend, pas un identifiant numérique.
+    final String? parsedUserId = (userData is Map
+            ? (userData['id'] ?? userData['userId'] ?? userData['publicId'])
+            : (json['userId'] ?? json['clientId'] ?? json['utilisateurId']))
+        ?.toString();
 
     final String parsedClientNom =
         (json['nomResponsable'] ??
@@ -83,24 +82,24 @@ class ReservationModel {
     final String parsedTrajetId =
         (json['trajetId'] ??
                 json['trajet_id'] ??
-                (trajetData != null ? trajetData['id'] : null))
+                (effectiveTrajetData != null ? effectiveTrajetData['id'] : null))
             ?.toString() ??
         '';
 
     final dynamic villeDepartData =
-        trajetData?['villeDepart'] ?? trajetData?['villeDepartDto'];
+        effectiveTrajetData?['villeDepart'] ?? effectiveTrajetData?['villeDepartDto'];
     final dynamic villeArriveeData =
-        trajetData?['villeArrivee'] ?? trajetData?['villeArriveeDto'];
+        effectiveTrajetData?['villeArrivee'] ?? effectiveTrajetData?['villeArriveeDto'];
     final dynamic vehiculeData =
-        trajetData?['vehicule'] ?? trajetData?['vehiculeDto'];
+        effectiveTrajetData?['vehicule'] ?? effectiveTrajetData?['vehiculeDto'];
 
     final String parsedVilleDepart =
         (villeDepartData is Map
                     ? (villeDepartData['nomVille'] ??
                         villeDepartData['name'] ??
                         villeDepartData['libelle'])
-                    : (trajetData?['villeDepartNom'] ??
-                        trajetData?['nomVilleDepart']))
+                    : (effectiveTrajetData?['villeDepartNom'] ??
+                        effectiveTrajetData?['nomVilleDepart']))
                 ?.toString() ??
             json['villeDepart']?.toString() ??
             '';
@@ -110,20 +109,20 @@ class ReservationModel {
                     ? (villeArriveeData['nomVille'] ??
                         villeArriveeData['name'] ??
                         villeArriveeData['libelle'])
-                    : (trajetData?['villeArriveeNom'] ??
-                        trajetData?['nomVilleArrivee']))
+                    : (effectiveTrajetData?['villeArriveeNom'] ??
+                        effectiveTrajetData?['nomVilleArrivee']))
                 ?.toString() ??
             json['villeArrivee']?.toString() ??
             '';
 
     final String parsedDateDepart =
-        (trajetData?['dateDepart'] ?? trajetData?['date'] ?? json['dateDepart'])
+        (effectiveTrajetData?['dateDepart'] ?? effectiveTrajetData?['date'] ?? json['dateDepart'])
             ?.toString() ??
         '';
 
     final String parsedHeureDepart =
-        (trajetData?['heureDepart'] ??
-                trajetData?['heure'] ??
+        (effectiveTrajetData?['heureDepart'] ??
+                effectiveTrajetData?['heure'] ??
                 json['heureDepart'])
             ?.toString() ??
         '';
@@ -133,8 +132,8 @@ class ReservationModel {
                     ? (vehiculeData['immatriculation'] ??
                         vehiculeData['matricule'] ??
                         vehiculeData['plaque'])
-                    : (trajetData?['vehiculeImmatriculation'] ??
-                        trajetData?['immatriculation']))
+                    : (effectiveTrajetData?['vehiculeImmatriculation'] ??
+                        effectiveTrajetData?['immatriculation']))
                 ?.toString() ??
             json['vehiculeImmatriculation']?.toString() ??
             '';
@@ -144,7 +143,7 @@ class ReservationModel {
 
     final double parsedPrixUnitaire =
         double.tryParse(
-          (trajetData?['tarif'] ?? trajetData?['prix'] ?? json['tarif'] ?? 0)
+          (effectiveTrajetData?['tarif'] ?? effectiveTrajetData?['prix'] ?? json['tarif'] ?? 0)
               .toString(),
         ) ??
         0;

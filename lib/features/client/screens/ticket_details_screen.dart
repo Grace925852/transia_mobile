@@ -189,108 +189,211 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
     return '$date • $time';
   }
 
-  pw.Widget _pdfRow(String label, String value) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 10),
-      child: pw.Row(
-        children: [
-          pw.Expanded(
-            flex: 3,
-            child: pw.Text(
-              label,
-              style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
-            ),
-          ),
-          pw.Expanded(
-            flex: 5,
-            child: pw.Text(
-              value,
-              textAlign: pw.TextAlign.right,
-              style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
-            ),
-          ),
-        ],
+  // Format compact façon "vrai billet de transport" (paysage, une page par billet) plutôt qu'une
+  // page A4 quasi vide avec une carte centrée — remplace l'ancien format jugé trop grand.
+  static const double _ticketWidthMm = 190;
+  static const double _ticketHeightMm = 85;
+
+  PdfPageFormat get _ticketPageFormat => PdfPageFormat(
+        _ticketWidthMm * PdfPageFormat.mm,
+        _ticketHeightMm * PdfPageFormat.mm,
+        marginAll: 0,
+      );
+
+  pw.Widget _dashedLine({required bool vertical, required double length}) {
+    const dash = 3.0;
+    const gap = 2.5;
+    final count = (length / (dash + gap)).floor();
+    final dashes = List.generate(
+      count,
+      (_) => pw.Container(
+        width: vertical ? 0.75 : dash,
+        height: vertical ? dash : 0.75,
+        margin: pw.EdgeInsets.only(
+          bottom: vertical ? gap : 0,
+          right: vertical ? 0 : gap,
+        ),
+        color: PdfColors.grey400,
       ),
+    );
+    return vertical
+        ? pw.Column(mainAxisSize: pw.MainAxisSize.min, children: dashes)
+        : pw.Row(mainAxisSize: pw.MainAxisSize.min, children: dashes);
+  }
+
+  pw.Widget _miniInfo(String label, String value) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      mainAxisSize: pw.MainAxisSize.min,
+      children: [
+        pw.Text(
+          label,
+          style: pw.TextStyle(
+            fontSize: 6.5,
+            color: PdfColors.grey600,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+        pw.SizedBox(height: 1.5),
+        pw.Text(
+          value,
+          style: pw.TextStyle(fontSize: 9.5, fontWeight: pw.FontWeight.bold),
+          maxLines: 1,
+          overflow: pw.TextOverflow.clip,
+        ),
+      ],
+    );
+  }
+
+  Future<pw.Page> _buildTicketPage(_PassengerTicketData ticket) async {
+    final qrSvg = await pw.Barcode.qrCode().toSvg(
+      _buildQrDataForTicket(ticket),
+      width: 100,
+      height: 100,
+    );
+
+    final isPaid = widget.reservation.isPaidOrValidated;
+    final shortRef = widget.reservation.id.length >= 8
+        ? widget.reservation.id.substring(widget.reservation.id.length - 8).toUpperCase()
+        : widget.reservation.id.toUpperCase();
+
+    return pw.Page(
+      pageFormat: _ticketPageFormat,
+      margin: pw.EdgeInsets.zero,
+      build: (context) {
+        return pw.Container(
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey400, width: 0.75),
+          ),
+          child: pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            children: [
+              pw.Container(width: 6, color: PdfColors.blue700),
+              pw.Expanded(
+                child: pw.Padding(
+                  padding: const pw.EdgeInsets.fromLTRB(12, 10, 10, 10),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        children: [
+                          pw.Row(
+                            crossAxisAlignment: pw.CrossAxisAlignment.end,
+                            children: [
+                              pw.Text(
+                                'TRANSIA',
+                                style: pw.TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: PdfColors.blue700,
+                                ),
+                              ),
+                              pw.SizedBox(width: 6),
+                              pw.Text(
+                                'Billet de transport',
+                                style: pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
+                              ),
+                            ],
+                          ),
+                          pw.Container(
+                            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: pw.BoxDecoration(
+                              color: PdfColors.blue50,
+                              borderRadius: pw.BorderRadius.circular(8),
+                            ),
+                            child: pw.Text(
+                              '${ticket.ticketIndex}/${ticket.totalTickets}',
+                              style: pw.TextStyle(
+                                fontSize: 8,
+                                fontWeight: pw.FontWeight.bold,
+                                color: PdfColors.blue700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      _dashedLine(vertical: false, length: 165),
+                      pw.Row(
+                        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        children: [
+                          pw.Expanded(
+                            child: pw.Text(
+                              widget.reservation.trajetLabel,
+                              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+                              maxLines: 1,
+                              overflow: pw.TextOverflow.clip,
+                            ),
+                          ),
+                          pw.Container(
+                            padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            decoration: pw.BoxDecoration(
+                              color: isPaid ? PdfColors.green50 : PdfColors.orange50,
+                              borderRadius: pw.BorderRadius.circular(10),
+                            ),
+                            child: pw.Text(
+                              isPaid ? 'PAYÉ' : 'EN ATTENTE',
+                              style: pw.TextStyle(
+                                fontSize: 6.5,
+                                fontWeight: pw.FontWeight.bold,
+                                color: isPaid ? PdfColors.green800 : PdfColors.orange800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      pw.Text(
+                        _buildDateTimeLine(),
+                        style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+                      ),
+                      pw.Row(
+                        children: [
+                          pw.Expanded(flex: 3, child: _miniInfo('PASSAGER', ticket.passengerName)),
+                          pw.Expanded(flex: 1, child: _miniInfo('SIÈGE', ticket.seatNumber)),
+                        ],
+                      ),
+                      pw.Row(
+                        children: [
+                          pw.Expanded(flex: 3, child: _miniInfo('RÉF. RÉSERVATION', shortRef)),
+                          pw.Expanded(flex: 1, child: _miniInfo('PRIX', widget.reservation.prixFormate)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(vertical: 8),
+                child: _dashedLine(vertical: true, length: 69),
+              ),
+              pw.Container(
+                width: 62,
+                padding: const pw.EdgeInsets.all(8),
+                child: pw.Column(
+                  mainAxisAlignment: pw.MainAxisAlignment.center,
+                  children: [
+                    pw.SizedBox(width: 48, height: 48, child: pw.SvgImage(svg: qrSvg)),
+                    pw.SizedBox(height: 5),
+                    pw.Text(
+                      'Scannez pour valider',
+                      textAlign: pw.TextAlign.center,
+                      style: pw.TextStyle(fontSize: 6, color: PdfColors.grey600),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
   Future<Uint8List> _buildSingleTicketPdf(_PassengerTicketData ticket) async {
     final pdf = pw.Document();
-
-    final qrSvg = await pw.Barcode.qrCode().toSvg(
-      _buildQrDataForTicket(ticket),
-      width: 140,
-      height: 140,
-    );
-
-    pdf.addPage(
-      pw.Page(
-        margin: const pw.EdgeInsets.all(24),
-        pageFormat: PdfPageFormat.a4,
-        build: (context) {
-          return pw.Container(
-            padding: const pw.EdgeInsets.all(20),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.blue700, width: 1.5),
-              borderRadius: pw.BorderRadius.circular(16),
-            ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      'TRANSIA',
-                      style: pw.TextStyle(
-                        fontSize: 24,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.blue700,
-                      ),
-                    ),
-                    pw.Container(
-                      padding: const pw.EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: pw.BoxDecoration(
-                        color: PdfColors.blue50,
-                        borderRadius: pw.BorderRadius.circular(20),
-                      ),
-                      child: pw.Text(
-                        '${ticket.ticketIndex}/${ticket.totalTickets}',
-                        style: pw.TextStyle(
-                          fontSize: 14,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.blue700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                pw.SizedBox(height: 18),
-                pw.Center(
-                  child: pw.SizedBox(
-                    width: 140,
-                    height: 140,
-                    child: pw.SvgImage(svg: qrSvg),
-                  ),
-                ),
-                pw.SizedBox(height: 18),
-                _pdfRow('Passager', ticket.passengerName),
-                _pdfRow('Trajet', widget.reservation.trajetLabel),
-                _pdfRow('Date / Heure', _buildDateTimeLine()),
-                _pdfRow('Siège', ticket.seatNumber),
-                _pdfRow('Prix', widget.reservation.prixFormate),
-                _pdfRow('Réservation', widget.reservation.id),
-                _pdfRow('Statut', widget.reservation.statut),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-
+    pdf.addPage(await _buildTicketPage(ticket));
     return pdf.save();
   }
 
@@ -300,79 +403,7 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
     final pdf = pw.Document();
 
     for (final ticket in selectedTickets) {
-      final qrSvg = await pw.Barcode.qrCode().toSvg(
-        _buildQrDataForTicket(ticket),
-        width: 140,
-        height: 140,
-      );
-
-      pdf.addPage(
-        pw.Page(
-          margin: const pw.EdgeInsets.all(24),
-          pageFormat: PdfPageFormat.a4,
-          build: (context) {
-            return pw.Container(
-              padding: const pw.EdgeInsets.all(20),
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColors.blue700, width: 1.5),
-                borderRadius: pw.BorderRadius.circular(16),
-              ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                    children: [
-                      pw.Text(
-                        'TRANSIA',
-                        style: pw.TextStyle(
-                          fontSize: 24,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.blue700,
-                        ),
-                      ),
-                      pw.Container(
-                        padding: const pw.EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: pw.BoxDecoration(
-                          color: PdfColors.blue50,
-                          borderRadius: pw.BorderRadius.circular(20),
-                        ),
-                        child: pw.Text(
-                          '${ticket.ticketIndex}/${ticket.totalTickets}',
-                          style: pw.TextStyle(
-                            fontSize: 14,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.blue700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  pw.SizedBox(height: 18),
-                  pw.Center(
-                    child: pw.SizedBox(
-                      width: 140,
-                      height: 140,
-                      child: pw.SvgImage(svg: qrSvg),
-                    ),
-                  ),
-                  pw.SizedBox(height: 18),
-                  _pdfRow('Passager', ticket.passengerName),
-                  _pdfRow('Trajet', widget.reservation.trajetLabel),
-                  _pdfRow('Date / Heure', _buildDateTimeLine()),
-                  _pdfRow('Siège', ticket.seatNumber),
-                  _pdfRow('Prix', widget.reservation.prixFormate),
-                  _pdfRow('Réservation', widget.reservation.id),
-                  _pdfRow('Statut', widget.reservation.statut),
-                ],
-              ),
-            );
-          },
-        ),
-      );
+      pdf.addPage(await _buildTicketPage(ticket));
     }
 
     return pdf.save();

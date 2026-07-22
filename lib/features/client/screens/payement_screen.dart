@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
+import 'package:transia_mobile/core/network/api_client.dart';
 import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
+import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/client/models/reservation_model.dart';
+import 'package:transia_mobile/features/client/services/paiement_service.dart';
 import 'package:transia_mobile/features/client/services/payment_status_service.dart';
 
 class PaymentScreen extends StatefulWidget {
@@ -20,9 +23,18 @@ class PaymentScreen extends StatefulWidget {
 class _PaymentScreenState extends State<PaymentScreen> {
   final Color primaryBlue = const Color(0xFF3158F5);
   final PaymentStatusService paymentStatusService = PaymentStatusService();
+  late final PaiementService paiementService;
 
   String paymentMethod = 'Flooz';
   bool isProcessing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    paiementService = PaiementService(
+      apiClient: ApiClient(SecureStorageService()),
+    );
+  }
 
   AppPreferencesController get prefs => AppPreferencesController.instance;
 
@@ -104,34 +116,66 @@ class _PaymentScreenState extends State<PaymentScreen> {
     return result;
   }
 
+  String get _modePaiementBackend {
+    switch (paymentMethod) {
+      case 'Flooz':
+        return 'FLOOZ';
+      case 'TMoney':
+        return 'TMONEY';
+      default:
+        return 'CARTE_BANCAIRE';
+    }
+  }
+
   Future<void> effectuerPaiement() async {
     setState(() {
       isProcessing = true;
     });
 
-    await Future.delayed(const Duration(seconds: 2));
-    await paymentStatusService.markReservationAsPaid(widget.reservation.id);
+    try {
+      await paiementService.payerEnLigne(
+        reservationId: widget.reservation.id,
+        montantVerse: widget.reservation.montantTotal,
+        modePaiement: _modePaiementBackend,
+      );
 
-    if (!mounted) return;
+      await paymentStatusService.markReservationAsPaid(widget.reservation.id);
 
-    setState(() {
-      isProcessing = false;
-    });
+      if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          tr(
-            fr: 'Paiement effectué avec succès par $paymentMethod.',
-            en: 'Payment completed successfully with $paymentMethod.',
-            es: 'Pago realizado correctamente con $paymentMethod.',
-            ar: 'تم الدفع بنجاح عبر $paymentMethod.',
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            tr(
+              fr: 'Paiement effectué avec succès par $paymentMethod.',
+              en: 'Payment completed successfully with $paymentMethod.',
+              es: 'Pago realizado correctamente con $paymentMethod.',
+              ar: 'تم الدفع بنجاح عبر $paymentMethod.',
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    context.go(AppRoutes.reservations);
+      // Revenir (pop) plutôt que go() : l'écran appelant (ReservationsScreen.onPay) attend déjà ce
+      // retour pour recharger la liste — go() recréait tout l'écran et court-circuitait ce rechargement,
+      // donnant l'impression que la réservation ne basculait jamais dans l'onglet "Payées".
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go(AppRoutes.reservations);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isProcessing = false;
+        });
+      }
+    }
   }
 
   Widget _buildInfoRow(

@@ -56,19 +56,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
     });
 
     try {
-      final storedNumericUserIdString =
-          await secureStorageService.getNumericUserId();
-      final storedFullName = await secureStorageService.getFullName();
-      final storedUsername = await secureStorageService.getTelephone();
-
-      final storedNumericUserId =
-          int.tryParse(storedNumericUserIdString ?? '');
-
-      final result = await reservationService.getMyReservations(
-        userId: storedNumericUserId ?? -1,
-        fullName: storedFullName ?? '',
-        username: storedUsername ?? '',
-      );
+      final result = await reservationService.getMyReservations();
 
       final paidIds = await paymentStatusService.getPaidReservationIds();
 
@@ -196,58 +184,30 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       await paymentStatusService.removePaidReservationId(reservation.id);
       await chargerReservations();
 
-      final cancelledReservation = reservations.cast<ReservationModel?>().firstWhere(
-            (r) => r?.id == reservation.id,
-            orElse: () => null,
-          );
-
-      final reallyCancelled =
-          cancelledReservation == null || cancelledReservation.isCancelled;
-
       if (!mounted) return;
 
-      if (reallyCancelled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              tr(
-                fr: 'Réservation annulée avec succès.',
-                en: 'Booking cancelled successfully.',
-                es: 'Reserva cancelada con éxito.',
-                ar: 'تم إلغاء الحجز بنجاح.',
-              ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            tr(
+              fr: 'Réservation annulée avec succès.',
+              en: 'Booking cancelled successfully.',
+              es: 'Reserva cancelada con éxito.',
+              ar: 'تم إلغاء الحجز بنجاح.',
             ),
           ),
-        );
-      }
-    } catch (_) {
-      await paymentStatusService.removePaidReservationId(reservation.id);
-      await chargerReservations();
-
-      final cancelledReservation = reservations.cast<ReservationModel?>().firstWhere(
-            (r) => r?.id == reservation.id,
-            orElse: () => null,
-          );
-
-      final reallyCancelled =
-          cancelledReservation == null || cancelledReservation.isCancelled;
-
+        ),
+      );
+    } catch (e) {
+      // Avant ce correctif, toute erreur ici était avalée silencieusement : l'utilisateur
+      // cliquait sur Annuler, confirmait, et ne voyait jamais si ça avait réellement échoué.
       if (!mounted) return;
-
-      if (reallyCancelled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              tr(
-                fr: 'Réservation annulée avec succès.',
-                en: 'Booking cancelled successfully.',
-                es: 'Reserva cancelada con éxito.',
-                ar: 'تم إلغاء الحجز بنجاح.',
-              ),
-            ),
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     }
   }
 

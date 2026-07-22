@@ -51,19 +51,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     });
 
     try {
-      final storedNumericUserIdString =
-          await secureStorageService.getNumericUserId();
-      final storedFullName = await secureStorageService.getFullName();
-      final storedUsername = await secureStorageService.getTelephone();
-
-      final storedNumericUserId =
-          int.tryParse(storedNumericUserIdString ?? '');
-
-      final result = await reservationService.getMyReservations(
-        userId: storedNumericUserId ?? -1,
-        fullName: storedFullName ?? '',
-        username: storedUsername ?? '',
-      );
+      final result = await reservationService.getMyReservations();
 
       final paidIds = await paymentStatusService.getPaidReservationIds();
 

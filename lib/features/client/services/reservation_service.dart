@@ -1,9 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:transia_mobile/core/constants/api_constants.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
-import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/client/models/reservation_model.dart';
 import 'package:transia_mobile/features/client/models/reservation_request.dart';
 
@@ -11,46 +9,6 @@ class ReservationService {
   final ApiClient apiClient;
 
   ReservationService({required this.apiClient});
-
-  final SecureStorageService _secureStorageService = SecureStorageService();
-
-  Future<String> _buildUserScopedKey(String baseKey) async {
-    final numericUserId = await _secureStorageService.getNumericUserId();
-    final username = await _secureStorageService.getTelephone();
-
-    if (numericUserId != null && numericUserId.trim().isNotEmpty) {
-      return '${baseKey}_user_$numericUserId';
-    }
-
-    if (username != null && username.trim().isNotEmpty) {
-      return '${baseKey}_username_${username.trim()}';
-    }
-
-    return '${baseKey}_anonymous';
-  }
-
-  Future<List<String>> getLocalCreatedReservationIds() async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = await _buildUserScopedKey('local_created_reservation_ids');
-    return prefs.getStringList(key) ?? [];
-  }
-
-  Future<void> saveLocalCreatedReservationId(String reservationId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = await _buildUserScopedKey('local_created_reservation_ids');
-    final current = prefs.getStringList(key) ?? [];
-
-    if (!current.contains(reservationId)) {
-      current.add(reservationId);
-      await prefs.setStringList(key, current);
-    }
-  }
-
-  Future<void> clearCurrentUserLocalCreatedReservationIds() async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = await _buildUserScopedKey('local_created_reservation_ids');
-    await prefs.remove(key);
-  }
 
   Future<Map<String, dynamic>> createReservation(
     ReservationRequestModel request,
@@ -66,20 +24,10 @@ class ReservationService {
 
       debugPrint('CREATE RESERVATION RESPONSE = ${response.data}');
 
-      Map<String, dynamic> result;
-
       if (response.data is Map<String, dynamic>) {
-        result = response.data as Map<String, dynamic>;
-      } else {
-        result = {'data': response.data};
+        return response.data as Map<String, dynamic>;
       }
-
-      final createdId = result['id']?.toString();
-      if (createdId != null && createdId.isNotEmpty) {
-        await saveLocalCreatedReservationId(createdId);
-      }
-
-      return result;
+      return {'data': response.data};
     } on DioException catch (e) {
       debugPrint('CREATE RESERVATION DIO STATUS = ${e.response?.statusCode}');
       debugPrint('CREATE RESERVATION DIO DATA = ${e.response?.data}');
@@ -126,64 +74,31 @@ class ReservationService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _getTrajetsRaw() async {
-    final response = await apiClient.dio.get(ApiConstants.trajets);
-
-    if (response.data is List) {
-      return (response.data as List)
-          .where((item) => item is Map)
-          .map((item) => Map<String, dynamic>.from(item as Map))
-          .toList();
-    }
-
-    return [];
-  }
-
-  Future<List<ReservationModel>> getReservations() async {
+  /// Réservations du client connecté, résolues côté serveur via le JWT (GET /reservations/me).
+  /// Le backend enrichit chaque réservation avec le trajet complet (villes, véhicule, tarif) :
+  /// plus besoin de charger les trajets séparément ni de filtrer par nom/identifiant en local.
+  Future<List<ReservationModel>> getMyReservations() async {
     try {
-      final reservationResponse = await apiClient.dio.get(
-        ApiConstants.reservations,
+      final response = await apiClient.dio.get(
+        '${ApiConstants.reservations}/me',
       );
 
-      final trajets = await _getTrajetsRaw();
+      if (response.data is! List) return [];
 
-      final Map<String, Map<String, dynamic>> trajetById = {
-        for (final trajet in trajets) (trajet['id'] ?? '').toString(): trajet,
-      };
+      final parsed = (response.data as List)
+          .where((item) => item is Map)
+          .map((item) => ReservationModel.fromJson(
+                Map<String, dynamic>.from(item as Map),
+              ))
+          .toList();
 
-      if (reservationResponse.data is List) {
-        final list = reservationResponse.data as List;
+      parsed.sort((a, b) {
+        final da = a.departureDateTime ?? DateTime(2100);
+        final db = b.departureDateTime ?? DateTime(2100);
+        return da.compareTo(db);
+      });
 
-        final parsed = list
-            .where((item) => item is Map)
-            .map((item) {
-              final map = Map<String, dynamic>.from(item as Map);
-              final trajetId = (map['trajetId'] ?? '').toString();
-              final trajetData = trajetById[trajetId];
-
-              final model = ReservationModel.fromJson(
-                map,
-                trajetData: trajetData,
-              );
-
-              debugPrint(
-                'RESERVATION => id=${model.id}, userId=${model.userId}, client=${model.clientNom}, trajetId=${model.trajetId}, date=${model.dateDepart}, total=${model.montantTotal}, statut=${model.statut}',
-              );
-
-              return model;
-            })
-            .toList();
-
-        parsed.sort((a, b) {
-          final da = a.departureDateTime ?? DateTime(2100);
-          final db = b.departureDateTime ?? DateTime(2100);
-          return da.compareTo(db);
-        });
-
-        return parsed;
-      }
-
-      return [];
+      return parsed;
     } on DioException catch (e) {
       throw Exception(
         e.response?.data?.toString() ??
@@ -194,94 +109,27 @@ class ReservationService {
     }
   }
 
-  String _normalize(String value) {
-    return value.trim().toLowerCase();
+  Future<List<ReservationModel>> getMyActiveReservations() async {
+    final all = await getMyReservations();
+    return all.where((item) => item.shouldShowInActiveReservations).toList();
   }
 
-  bool _containsNormalized(String base, String query) {
-    if (query.isEmpty) return false;
-    return _normalize(base).contains(_normalize(query));
+  Future<List<ReservationModel>> getMyHistoryReservations() async {
+    final all = await getMyReservations();
+    return all.where((item) => item.shouldShowInHistory).toList();
   }
 
-  Future<List<ReservationModel>> getMyReservations({
-    required int userId,
-    required String fullName,
-    required String username,
-  }) async {
-    final reservations = await getReservations();
-    final localCreatedIds = await getLocalCreatedReservationIds();
+  /// Sièges déjà occupés pour un trajet — utilisé pour construire le plan de sièges à la réservation.
+  Future<List<String>> getOccupiedSeats(String trajetId) async {
+    try {
+      final response = await apiClient.dio.get(
+        '${ApiConstants.reservations}/trajet/$trajetId/sieges-occupes',
+      );
 
-    final normalizedFullName = _normalize(fullName);
-    final normalizedUsername = _normalize(username);
-
-    final filtered = reservations.where((item) {
-      final sameUserId = item.userId == userId;
-
-      final sameNameExact =
-          normalizedFullName.isNotEmpty &&
-          _normalize(item.clientNom) == normalizedFullName;
-
-      final sameNameContains =
-          normalizedFullName.isNotEmpty &&
-          _containsNormalized(item.clientNom, normalizedFullName);
-
-      final sameUsernameExact =
-          normalizedUsername.isNotEmpty &&
-          _normalize(item.clientNom) == normalizedUsername;
-
-      final sameUsernameContains =
-          normalizedUsername.isNotEmpty &&
-          _containsNormalized(item.clientNom, normalizedUsername);
-
-      final locallyCreated = localCreatedIds.contains(item.id);
-
-      return sameUserId ||
-          sameNameExact ||
-          sameNameContains ||
-          sameUsernameExact ||
-          sameUsernameContains ||
-          locallyCreated;
-    }).toList();
-
-    debugPrint(
-      'FILTERED RESERVATIONS => userId=$userId, fullName=$fullName, username=$username, localIds=${localCreatedIds.length}, count=${filtered.length}',
-    );
-
-    return filtered;
-  }
-
-  Future<List<ReservationModel>> getMyActiveReservations({
-    required int userId,
-    required String fullName,
-    required String username,
-  }) async {
-    final all = await getMyReservations(
-      userId: userId,
-      fullName: fullName,
-      username: username,
-    );
-
-    final active =
-        all.where((item) => item.shouldShowInActiveReservations).toList();
-
-    debugPrint('ACTIVE RESERVATIONS COUNT = ${active.length}');
-    return active;
-  }
-
-  Future<List<ReservationModel>> getMyHistoryReservations({
-    required int userId,
-    required String fullName,
-    required String username,
-  }) async {
-    final all = await getMyReservations(
-      userId: userId,
-      fullName: fullName,
-      username: username,
-    );
-
-    final history = all.where((item) => item.shouldShowInHistory).toList();
-
-    debugPrint('HISTORY RESERVATIONS COUNT = ${history.length}');
-    return history;
+      if (response.data is! List) return [];
+      return (response.data as List).map((e) => e.toString()).toList();
+    } on DioException {
+      return [];
+    }
   }
 }

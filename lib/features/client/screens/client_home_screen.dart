@@ -10,6 +10,7 @@ import 'package:transia_mobile/features/client/models/ville_model.dart';
 import 'package:transia_mobile/features/client/services/trajet_service.dart';
 import 'package:transia_mobile/features/client/services/ville_service.dart';
 import 'package:transia_mobile/shared/widgets/user_avatar.dart';
+import 'package:transia_mobile/shared/widgets/vehicule_thumbnail.dart';
 
 class ClientHomeScreen extends StatefulWidget {
   final bool showScaffold;
@@ -852,7 +853,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   }
 }
 
-class _SearchableCityField extends StatefulWidget {
+// Sélecteur de ville en bottom sheet plutôt qu'un Autocomplete "dropdown" : le
+// positionnement de la liste d'un Autocomplete via CompositedTransformFollower est
+// fragile dans un ListView scrollable (mauvais alignement, coupé par le clavier).
+// Un bottom sheet est natif, toujours bien positionné et plus lisible sur mobile.
+class _SearchableCityField extends StatelessWidget {
   final IconData icon;
   final String hintText;
   final String? initialValue;
@@ -869,158 +874,219 @@ class _SearchableCityField extends StatefulWidget {
     required this.onChanged,
   });
 
-  @override
-  State<_SearchableCityField> createState() => _SearchableCityFieldState();
-}
+  Future<void> _ouvrirSelecteur(BuildContext context) async {
+    final selection = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _CitySelectorSheet(
+        title: hintText,
+        cities: cities,
+        excludedValue: excludedValue,
+        selectedValue: initialValue,
+      ),
+    );
 
-class _SearchableCityFieldState extends State<_SearchableCityField> {
-  late final TextEditingController controller;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = TextEditingController(text: widget.initialValue ?? '');
-  }
-
-  @override
-  void didUpdateWidget(covariant _SearchableCityField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if ((widget.initialValue ?? '') != controller.text) {
-      controller.text = widget.initialValue ?? '';
+    if (selection != null) {
+      onChanged(selection);
     }
   }
 
   @override
+  Widget build(BuildContext context) {
+    final hasValue = (initialValue ?? '').trim().isNotEmpty;
+
+    return GestureDetector(
+      onTap: () => _ouvrirSelecteur(context),
+      child: _InputDisplayBox(
+        icon: icon,
+        text: hasValue ? initialValue! : hintText,
+        isPlaceholder: !hasValue,
+        trailingIcon: Icons.keyboard_arrow_down_rounded,
+      ),
+    );
+  }
+}
+
+class _CitySelectorSheet extends StatefulWidget {
+  final String title;
+  final List<String> cities;
+  final String? excludedValue;
+  final String? selectedValue;
+
+  const _CitySelectorSheet({
+    required this.title,
+    required this.cities,
+    required this.excludedValue,
+    required this.selectedValue,
+  });
+
+  @override
+  State<_CitySelectorSheet> createState() => _CitySelectorSheetState();
+}
+
+class _CitySelectorSheetState extends State<_CitySelectorSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  late List<String> _villesFiltrees;
+
+  @override
+  void initState() {
+    super.initState();
+    _villesFiltrees = _filtrer('');
+  }
+
+  @override
   void dispose() {
-    controller.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  List<String> _filtrer(String terme) {
+    final excluded = widget.excludedValue?.trim().toLowerCase() ?? '';
+    final query = terme.trim().toLowerCase();
+
+    return widget.cities.where((city) {
+      if (excluded.isNotEmpty && city.toLowerCase() == excluded) return false;
+      if (query.isEmpty) return true;
+      return city.toLowerCase().contains(query);
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fillColor =
-        isDark ? const Color(0xFF111827) : const Color(0xFFF6F7FB);
-    final borderColor =
-        isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final sheetColor = isDark ? const Color(0xFF111827) : Colors.white;
     final textColor = isDark ? Colors.white : const Color(0xFF111827);
-    final hintColor =
-        isDark ? const Color(0xFF94A3B8) : const Color(0xFF9CA3AF);
-    final popupColor = Theme.of(context).cardColor;
+    final hintColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF9CA3AF);
+    final fillColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFF6F7FB);
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return Autocomplete<String>(
-      optionsBuilder: (TextEditingValue textEditingValue) {
-        final query = textEditingValue.text.trim().toLowerCase();
-        final excluded = widget.excludedValue?.trim().toLowerCase() ?? '';
-
-        final baseCities = widget.cities.where((city) {
-          return excluded.isEmpty || city.toLowerCase() != excluded;
-        });
-
-        if (query.isEmpty) {
-          return baseCities;
-        }
-
-        return baseCities.where(
-          (city) => city.toLowerCase().contains(query),
-        );
-      },
-      onSelected: (value) {
-        controller.text = value;
-        widget.onChanged(value);
-      },
-      fieldViewBuilder: (
-        context,
-        textController,
-        focusNode,
-        onFieldSubmitted,
-      ) {
-        if (textController.text != controller.text) {
-          textController.text = controller.text;
-          textController.selection = TextSelection.fromPosition(
-            TextPosition(offset: textController.text.length),
-          );
-        }
-
-        return Container(
-          height: 52,
-          decoration: BoxDecoration(
-            color: fillColor,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: borderColor,
-              width: 1,
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.65,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        expand: false,
+        builder: (context, scrollController) {
+          return Container(
+            decoration: BoxDecoration(
+              color: sheetColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
-          ),
-          child: TextField(
-            controller: textController,
-            focusNode: focusNode,
-            onChanged: widget.onChanged,
-            style: TextStyle(
-              fontSize: 15,
-              color: textColor,
-            ),
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              hintText: widget.hintText,
-              hintStyle: TextStyle(
-                fontSize: 14,
-                color: hintColor,
-              ),
-              prefixIcon: Icon(
-                widget.icon,
-                color: hintColor,
-                size: 22,
-              ),
-              suffixIcon: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: hintColor,
-                size: 25,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 14,
-              ),
-            ),
-          ),
-        );
-      },
-      optionsViewBuilder: (context, onSelected, options) {
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 6,
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              width: MediaQuery.of(context).size.width - 72,
-              constraints: const BoxConstraints(maxHeight: 210),
-              decoration: BoxDecoration(
-                color: popupColor,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                itemCount: options.length,
-                itemBuilder: (context, index) {
-                  final option = options.elementAt(index);
-
-                  return ListTile(
-                    dense: true,
-                    title: Text(
-                      option,
-                      style: TextStyle(fontSize: 14, color: textColor),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: hintColor.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.title,
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: textColor,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: Icon(Icons.close_rounded, color: hintColor),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: fillColor,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    onTap: () {
-                      onSelected(option);
-                    },
-                  );
-                },
-              ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.search_rounded, color: hintColor, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            autofocus: false,
+                            style: TextStyle(fontSize: 15, color: textColor),
+                            decoration: InputDecoration(
+                              border: InputBorder.none,
+                              isDense: true,
+                              hintText: 'Rechercher une ville...',
+                              hintStyle: TextStyle(fontSize: 14, color: hintColor),
+                            ),
+                            onChanged: (value) {
+                              setState(() => _villesFiltrees = _filtrer(value));
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: _villesFiltrees.isEmpty
+                      ? Center(
+                          child: Text(
+                            'Aucune ville trouvée',
+                            style: TextStyle(color: hintColor, fontSize: 14),
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: scrollController,
+                          padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                          itemCount: _villesFiltrees.length,
+                          itemBuilder: (context, index) {
+                            final ville = _villesFiltrees[index];
+                            final selected = ville == widget.selectedValue;
+
+                            return ListTile(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              leading: Icon(
+                                Icons.location_on_outlined,
+                                color: selected ? const Color(0xFF3158F5) : hintColor,
+                              ),
+                              title: Text(
+                                ville,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                  color: selected ? const Color(0xFF3158F5) : textColor,
+                                ),
+                              ),
+                              trailing: selected
+                                  ? const Icon(Icons.check_circle_rounded, color: Color(0xFF3158F5))
+                                  : null,
+                              onTap: () => Navigator.of(context).pop(ville),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
@@ -1029,11 +1095,13 @@ class _InputDisplayBox extends StatelessWidget {
   final IconData icon;
   final String text;
   final IconData? trailingIcon;
+  final bool isPlaceholder;
 
   const _InputDisplayBox({
     required this.icon,
     required this.text,
     this.trailingIcon,
+    this.isPlaceholder = false,
   });
 
   @override
@@ -1069,9 +1137,10 @@ class _InputDisplayBox extends StatelessWidget {
           Expanded(
             child: Text(
               text,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 15,
-                color: textColor,
+                color: isPlaceholder ? hintColor : textColor,
               ),
             ),
           ),
@@ -1197,18 +1266,9 @@ class _TripCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            height: 46,
-            width: 46,
-            decoration: BoxDecoration(
-              color: iconColor,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.directions_bus_filled_rounded,
-              color: Colors.white,
-              size: 26,
-            ),
+          VehiculeThumbnail(
+            imageBase64: trajet.vehiculeImage,
+            size: 46,
           ),
           const SizedBox(height: 12),
           Text(
