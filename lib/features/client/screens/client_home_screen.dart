@@ -775,41 +775,51 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               onReset: reinitialiserRecherche,
             )
           else
-            GridView.builder(
-              itemCount: trajetsAffiches.length,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.50,
-              ),
-              itemBuilder: (context, index) {
-                final trajet = trajetsAffiches[index];
+            // Wrap plutôt qu'un GridView à ratio fixe : chaque carte ne prend que la hauteur que son
+            // contenu exige (avant, un Spacer() forçait un grand vide pour remplir un ratio 1:2 imposé
+            // à toutes les cartes). Le nombre de colonnes s'adapte à la largeur disponible.
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const spacing = 12.0;
+                const minCardWidth = 168.0;
+                final columns = (constraints.maxWidth / (minCardWidth + spacing))
+                    .floor()
+                    .clamp(2, 4);
+                final cardWidth =
+                    (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
-                return _TripCard(
-                  trajet: trajet,
-                  iconColor: _getTripColor(index),
-                  buttonColor: primaryBlue,
-                  reserveLabel: tr(
-                    fr: 'Réserver',
-                    en: 'Book',
-                    es: 'Reservar',
-                    ar: 'احجز',
-                  ),
-                  vehicleLabel: tr(
-                    fr: 'Véhicule',
-                    en: 'Vehicle',
-                    es: 'Vehículo',
-                    ar: 'مركبة',
-                  ),
-                  onReserve: () {
-                    context.push(
-                      AppRoutes.tripDetail,
-                      extra: trajet,
-                    );
-                  },
+                return Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  children: [
+                    for (int index = 0; index < trajetsAffiches.length; index++)
+                      SizedBox(
+                        width: cardWidth,
+                        child: _TripCard(
+                          trajet: trajetsAffiches[index],
+                          iconColor: _getTripColor(index),
+                          buttonColor: primaryBlue,
+                          reserveLabel: tr(
+                            fr: 'Réserver',
+                            en: 'Book',
+                            es: 'Reservar',
+                            ar: 'احجز',
+                          ),
+                          vehicleLabel: tr(
+                            fr: 'Véhicule',
+                            en: 'Vehicle',
+                            es: 'Vehículo',
+                            ar: 'مركبة',
+                          ),
+                          onReserve: () {
+                            context.push(
+                              AppRoutes.tripDetail,
+                              extra: trajetsAffiches[index],
+                            );
+                          },
+                        ),
+                      ),
+                  ],
                 );
               },
             ),
@@ -1255,7 +1265,7 @@ class _TripCard extends StatelessWidget {
     final chipColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFF0F2F6);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 13, 12, 12),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(18),
@@ -1265,56 +1275,56 @@ class _TripCard extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          VehiculeThumbnail(
-            imageBase64: trajet.vehiculeImage,
-            size: 46,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '${trajet.villeDepart} → ${trajet.villeArrivee}',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: titleColor,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              height: 1.15,
-            ),
-          ),
-          const SizedBox(height: 7),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 7,
-              vertical: 4,
-            ),
-            decoration: BoxDecoration(
-              color: chipColor,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              trajet.statut,
-              style: TextStyle(
-                color: subtitleColor,
-                fontSize: 10,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              VehiculeThumbnail(
+                imageBase64: trajet.vehiculeImage,
+                size: 40,
               ),
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${trajet.villeDepart} → ${trajet.villeArrivee}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: titleColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: chipColor,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        trajet.statut,
+                        style: TextStyle(
+                          color: subtitleColor,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          _InfoLine(
-            icon: Icons.location_on_outlined,
-            iconColor: const Color(0xFF4CD964),
-            text: trajet.villeDepart,
-            textColor: subtitleColor,
-          ),
-          const SizedBox(height: 4),
-          _InfoLine(
-            icon: Icons.location_on_outlined,
-            iconColor: const Color(0xFFE5485D),
-            text: trajet.villeArrivee,
-            textColor: subtitleColor,
-          ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 10),
           _InfoLine(
             icon: Icons.access_time_rounded,
             iconColor: subtitleColor,
@@ -1330,21 +1340,28 @@ class _TripCard extends StatelessWidget {
                 : trajet.vehiculeImmatriculation,
             textColor: subtitleColor,
           ),
-          const Spacer(),
+          const SizedBox(height: 10),
           Container(
             height: 1,
             color: borderColor,
           ),
           const SizedBox(height: 8),
-          Text(
-            trajet.prixFormate,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: titleColor,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(
+                  trajet.prixFormate,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: titleColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           SizedBox(

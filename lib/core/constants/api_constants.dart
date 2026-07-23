@@ -1,5 +1,11 @@
 class ApiConstants {
-  static const String baseUrl = 'http://localhost:8181';
+  // 'localhost' ne fonctionne que pour Flutter Web/l'émulateur Android (qui pointent
+  // vers la machine hôte) : sur un téléphone physique, 'localhost' désigne le téléphone
+  // lui-même. Il faut l'IP locale (Wi-Fi) de la machine qui fait tourner le backend, et
+  // le téléphone doit être sur le même réseau Wi-Fi. À remettre à jour si cette IP change.
+  static const String baseUrl = 'http://192.168.0.172:8181';
+  // static const String baseUrl = 'http://localhost:8181';
+
   // baseUrl: '/api/v1',
 
   static const String login = '/api/v1/login';

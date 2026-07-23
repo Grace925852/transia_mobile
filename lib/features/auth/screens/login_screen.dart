@@ -677,8 +677,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
 Widget _buildLogo() {
   return Container(
-    height: 180,
-    width: 180,
+    height: 128,
+    width: 128,
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(34),
@@ -696,7 +696,7 @@ Widget _buildLogo() {
             errorBuilder: (_, __, ___) {
               return Icon(
                 Icons.directions_bus_rounded,
-                size: 100,
+                size: 70,
                 color: primaryBlue,
               );
             },
