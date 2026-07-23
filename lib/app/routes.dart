@@ -1,16 +1,19 @@
 import 'package:go_router/go_router.dart';
-import 'package:transia_mobile/features/auth/screens/login_screen.dart';
 import 'package:transia_mobile/features/auth/screens/forgot_password_screen.dart';
-import 'package:transia_mobile/shared/screens/edit_profile_screen.dart';
+import 'package:transia_mobile/features/auth/screens/login_screen.dart';
 import 'package:transia_mobile/features/chauffeur/models/chauffeur_passenger_model.dart';
 import 'package:transia_mobile/features/chauffeur/models/chauffeur_trip_model.dart';
 import 'package:transia_mobile/features/chauffeur/screens/chauffeur_main_screen.dart';
+import 'package:transia_mobile/features/chauffeur/screens/chauffeur_report_problem_screen.dart';
 import 'package:transia_mobile/features/chauffeur/screens/chauffeur_scan_screen.dart';
 import 'package:transia_mobile/features/chauffeur/screens/chauffeur_trip_passengers_screen.dart';
-import 'package:transia_mobile/features/chauffeur/screens/chauffeur_report_problem_screen.dart';
+import 'package:transia_mobile/features/client/models/colis_model.dart';
 import 'package:transia_mobile/features/client/models/reservation_model.dart';
 import 'package:transia_mobile/features/client/models/trajet_model.dart';
 import 'package:transia_mobile/features/client/screens/booking_summary_screen.dart';
+import 'package:transia_mobile/features/client/screens/client_colis_detail_screen.dart';
+import 'package:transia_mobile/features/client/screens/client_colis_form_screen.dart';
+import 'package:transia_mobile/features/client/screens/client_colis_list_screen.dart';
 import 'package:transia_mobile/features/client/screens/client_main_screen.dart';
 import 'package:transia_mobile/features/client/screens/history_screen.dart';
 import 'package:transia_mobile/features/client/screens/payement_screen.dart';
@@ -20,24 +23,23 @@ import 'package:transia_mobile/features/client/screens/ticket_details_screen.dar
 import 'package:transia_mobile/features/client/screens/tracking_detail_screen.dart';
 import 'package:transia_mobile/features/client/screens/trip_detail_screen.dart';
 import 'package:transia_mobile/features/client/screens/trip_list_screen.dart';
-import 'package:transia_mobile/features/client/screens/client_colis_list_screen.dart';
-import 'package:transia_mobile/features/client/screens/client_colis_form_screen.dart';
-import 'package:transia_mobile/features/client/screens/client_colis_detail_screen.dart';
-import 'package:transia_mobile/features/client/models/colis_model.dart';
-import 'package:transia_mobile/features/livreur/screens/livreur_main_screen.dart';
-import 'package:transia_mobile/features/livreur/screens/livreur_colis_detail_screen.dart';
 import 'package:transia_mobile/features/livreur/models/livreur_colis_model.dart';
+import 'package:transia_mobile/features/livreur/screens/livreur_colis_detail_screen.dart';
+import 'package:transia_mobile/features/livreur/screens/livreur_main_screen.dart';
+import 'package:transia_mobile/shared/screens/edit_profile_screen.dart';
 
 class AppRoutes {
   static const String login = '/';
   static const String forgotPassword = '/forgot-password';
   static const String editProfile = '/edit-profile';
+
   static const String client = '/client';
 
   static const String chauffeur = '/chauffeur';
   static const String chauffeurPassengers = '/chauffeur/passagers';
   static const String chauffeurScan = '/chauffeur/scan';
-  static const String chauffeurReportProblem = '/chauffeur/report-problem';
+  static const String chauffeurReportProblem =
+      '/chauffeur/report-problem';
 
   static const String livreur = '/livreur';
   static const String livreurColisDetail = '/livreur/colis-detail';
@@ -59,7 +61,6 @@ class AppRoutes {
   static const String clientColisForm = '/client-colis/nouveau';
   static const String clientColisDetail = '/client-colis/detail';
 }
-
 
 const bool launchClientOnly = true;
 
@@ -96,11 +97,19 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.chauffeurScan,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>;
+
         return ChauffeurScanScreen(
           trip: data['trip'] as ChauffeurTripModel,
-          passengers: data['passengers'] as List<ChauffeurPassengerModel>,
+          passengers:
+              data['passengers'] as List<ChauffeurPassengerModel>,
         );
       },
+    ),
+    GoRoute(
+      path: AppRoutes.chauffeurReportProblem,
+      builder: (context, state) => ChauffeurReportProblemScreen(
+        trip: state.extra as ChauffeurTripModel,
+      ),
     ),
     GoRoute(
       path: AppRoutes.livreur,
@@ -116,6 +125,7 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.tripList,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>;
+
         return TripListScreen(
           trajets: data['trajets'],
           villeDepart: data['villeDepart'],
@@ -135,19 +145,25 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.bookingSummary,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>;
+
         return BookingSummaryScreen(
           trajet: data['trajet'] as TrajetModel,
           nombreSieges: data['nombreSieges'] as int,
-          selectedSeats: (data['selectedSeats'] as List<dynamic>? ?? [])
-              .map((e) => int.tryParse(e.toString()) ?? 0)
-              .where((e) => e > 0)
-              .toList(),
+          selectedSeats:
+              (data['selectedSeats'] as List<dynamic>? ?? [])
+                  .map((element) {
+                    return int.tryParse(element.toString()) ?? 0;
+                  })
+                  .where((element) => element > 0)
+                  .toList(),
         );
       },
     ),
     GoRoute(
       path: AppRoutes.reservations,
-      builder: (context, state) => const ClientMainScreen(initialIndex: 1),
+      builder: (context, state) {
+        return const ClientMainScreen(initialIndex: 1);
+      },
     ),
     GoRoute(
       path: AppRoutes.payment,
@@ -181,12 +197,6 @@ final GoRouter appRouter = GoRouter(
       path: AppRoutes.rating,
       builder: (context, state) => RatingScreen(
         reservation: state.extra as ReservationModel,
-      ),
-    ),
-    GoRoute(
-      path: AppRoutes.chauffeurReportProblem,
-      builder: (context, state) => ChauffeurReportProblemScreen(
-        trip: state.extra as ChauffeurTripModel,
       ),
     ),
     GoRoute(

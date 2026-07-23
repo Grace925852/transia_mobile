@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
+import 'package:transia_mobile/features/assistant/widgets/assistant_avatar.dart';
+import 'package:transia_mobile/features/assistant/widgets/assistant_bottom_sheet.dart';
 import 'package:transia_mobile/features/client/screens/client_colis_list_screen.dart';
 import 'package:transia_mobile/features/client/screens/client_home_screen.dart';
 import 'package:transia_mobile/features/client/screens/profile_screen.dart';
@@ -22,14 +24,19 @@ class _ClientMainScreenState extends State<ClientMainScreen> {
   late int selectedIndex;
   late final List<Widget> pages;
 
-  AppPreferencesController get prefs => AppPreferencesController.instance;
+  AppPreferencesController get prefs =>
+      AppPreferencesController.instance;
 
   @override
   void initState() {
     super.initState();
+
     selectedIndex = widget.initialIndex;
+
     pages = const [
-      ClientHomeScreen(showScaffold: false),
+      ClientHomeScreen(
+        showScaffold: false,
+      ),
       ReservationsScreen(),
       ClientColisListScreen(),
       TrackingListScreen(),
@@ -43,7 +50,16 @@ class _ClientMainScreenState extends State<ClientMainScreen> {
     required String es,
     required String ar,
   }) {
-    return prefs.tr(fr: fr, en: en, es: es, ar: ar);
+    return prefs.tr(
+      fr: fr,
+      en: en,
+      es: es,
+      ar: ar,
+    );
+  }
+
+  void _openAssistant() {
+    AssistantBottomSheet.show(context);
   }
 
   @override
@@ -59,19 +75,33 @@ class _ClientMainScreenState extends State<ClientMainScreen> {
             index: selectedIndex,
             children: pages,
           ),
+          floatingActionButton: selectedIndex == 0
+              ? AssistantAvatar(
+                  onTap: _openAssistant,
+                )
+              : null,
+          floatingActionButtonLocation:
+              FloatingActionButtonLocation.endFloat,
           bottomNavigationBar: SafeArea(
             top: false,
             child: Container(
               height: 68,
               decoration: BoxDecoration(
-                color: navTheme.backgroundColor ?? theme.cardColor,
+                color: navTheme.backgroundColor ??
+                    theme.cardColor,
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(
-                      alpha: theme.brightness == Brightness.dark ? 0.22 : 0.07,
+                      alpha:
+                          theme.brightness == Brightness.dark
+                              ? 0.22
+                              : 0.07,
                     ),
                     blurRadius: 14,
-                    offset: const Offset(0, -3),
+                    offset: const Offset(
+                      0,
+                      -3,
+                    ),
                   ),
                 ],
               ),
@@ -82,19 +112,25 @@ class _ClientMainScreenState extends State<ClientMainScreen> {
                     selectedIndex = index;
                   });
                 },
-                backgroundColor: navTheme.backgroundColor ?? theme.cardColor,
+                backgroundColor:
+                    navTheme.backgroundColor ??
+                        theme.cardColor,
                 elevation: 0,
                 type: BottomNavigationBarType.fixed,
                 selectedItemColor:
-                    navTheme.selectedItemColor ?? const Color(0xFF3158F5),
+                    navTheme.selectedItemColor ??
+                        const Color(0xFF3158F5),
                 unselectedItemColor:
-                    navTheme.unselectedItemColor ?? const Color(0xFF9CA3AF),
+                    navTheme.unselectedItemColor ??
+                        const Color(0xFF9CA3AF),
                 selectedFontSize: 11,
                 unselectedFontSize: 11,
                 iconSize: 24,
                 items: [
                   BottomNavigationBarItem(
-                    icon: const Icon(Icons.home_rounded),
+                    icon: const Icon(
+                      Icons.home_rounded,
+                    ),
                     label: tr(
                       fr: 'Accueil',
                       en: 'Home',
@@ -103,7 +139,9 @@ class _ClientMainScreenState extends State<ClientMainScreen> {
                     ),
                   ),
                   BottomNavigationBarItem(
-                    icon: const Icon(Icons.event_note_rounded),
+                    icon: const Icon(
+                      Icons.event_note_rounded,
+                    ),
                     label: tr(
                       fr: 'Réserv.',
                       en: 'Bookings',
@@ -112,8 +150,12 @@ class _ClientMainScreenState extends State<ClientMainScreen> {
                     ),
                   ),
                   BottomNavigationBarItem(
-                    icon: const Icon(Icons.inventory_2_outlined),
-                    activeIcon: const Icon(Icons.inventory_2_rounded),
+                    icon: const Icon(
+                      Icons.inventory_2_outlined,
+                    ),
+                    activeIcon: const Icon(
+                      Icons.inventory_2_rounded,
+                    ),
                     label: tr(
                       fr: 'Colis',
                       en: 'Parcels',
@@ -122,8 +164,12 @@ class _ClientMainScreenState extends State<ClientMainScreen> {
                     ),
                   ),
                   BottomNavigationBarItem(
-                    icon: const Icon(Icons.location_on_outlined),
-                    activeIcon: const Icon(Icons.location_on_rounded),
+                    icon: const Icon(
+                      Icons.location_on_outlined,
+                    ),
+                    activeIcon: const Icon(
+                      Icons.location_on_rounded,
+                    ),
                     label: tr(
                       fr: 'Suivi',
                       en: 'Tracking',
@@ -132,8 +178,12 @@ class _ClientMainScreenState extends State<ClientMainScreen> {
                     ),
                   ),
                   BottomNavigationBarItem(
-                    icon: const Icon(Icons.person_outline_rounded),
-                    activeIcon: const Icon(Icons.person_rounded),
+                    icon: const Icon(
+                      Icons.person_outline_rounded,
+                    ),
+                    activeIcon: const Icon(
+                      Icons.person_rounded,
+                    ),
                     label: tr(
                       fr: 'Profil',
                       en: 'Profile',

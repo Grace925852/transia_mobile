@@ -5,6 +5,8 @@ import 'package:transia_mobile/core/network/api_client.dart';
 import 'package:transia_mobile/core/network/self_service.dart';
 import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
+import 'package:transia_mobile/features/assistant/widgets/assistant_avatar.dart';
+import 'package:transia_mobile/features/assistant/widgets/assistant_bottom_sheet.dart';
 import 'package:transia_mobile/features/client/models/trajet_model.dart';
 import 'package:transia_mobile/features/client/models/ville_model.dart';
 import 'package:transia_mobile/features/client/services/trajet_service.dart';
@@ -14,10 +16,7 @@ import 'package:transia_mobile/shared/widgets/user_avatar.dart';
 class ClientHomeScreen extends StatefulWidget {
   final bool showScaffold;
 
-  const ClientHomeScreen({
-    super.key,
-    this.showScaffold = true,
-  });
+  const ClientHomeScreen({super.key, this.showScaffold = true});
 
   @override
   State<ClientHomeScreen> createState() => _ClientHomeScreenState();
@@ -76,15 +75,9 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     if (!mounted) return;
 
     setState(() {
-      clientNomConnecte =
-          (nom != null && nom.trim().isNotEmpty)
-              ? nom
-              : tr(
-                  fr: 'Client',
-                  en: 'Client',
-                  es: 'Cliente',
-                  ar: 'العميل',
-                );
+      clientNomConnecte = (nom != null && nom.trim().isNotEmpty)
+          ? nom
+          : tr(fr: 'Client', en: 'Client', es: 'Cliente', ar: 'العميل');
       clientPhotoBase64 = profil?.photoProfil;
     });
   }
@@ -158,10 +151,9 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
     final result = await showDatePicker(
       context: context,
-      initialDate:
-          selectedDate != null && !selectedDate!.isBefore(today)
-              ? selectedDate!
-              : today,
+      initialDate: selectedDate != null && !selectedDate!.isBefore(today)
+          ? selectedDate!
+          : today,
       firstDate: today,
       lastDate: DateTime(today.year + 2),
     );
@@ -177,10 +169,9 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   DateTime? _parseTrajetDateTime(TrajetModel trajet) {
     try {
       final rawDate = trajet.dateDepart.trim();
-      final rawTime =
-          trajet.heureFormatee.trim().isEmpty
-              ? '00:00'
-              : trajet.heureFormatee.trim();
+      final rawTime = trajet.heureFormatee.trim().isEmpty
+          ? '00:00'
+          : trajet.heureFormatee.trim();
 
       int year;
       int month;
@@ -204,8 +195,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
       final timeParts = rawTime.split(':');
       final hour = int.tryParse(timeParts[0]) ?? 0;
-      final minute =
-          timeParts.length > 1 ? int.tryParse(timeParts[1]) ?? 0 : 0;
+      final minute = timeParts.length > 1 ? int.tryParse(timeParts[1]) ?? 0 : 0;
 
       return DateTime(year, month, day, hour, minute);
     } catch (_) {
@@ -243,18 +233,17 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
 
     try {
       final filtered = trajets.where((trajet) {
-        final matchDepart =
-            depart.isEmpty
-                ? true
-                : trajet.villeDepart.trim().toLowerCase().contains(depart);
+        final matchDepart = depart.isEmpty
+            ? true
+            : trajet.villeDepart.trim().toLowerCase().contains(depart);
 
-        final matchArrivee =
-            arrivee.isEmpty
-                ? true
-                : trajet.villeArrivee.trim().toLowerCase().contains(arrivee);
+        final matchArrivee = arrivee.isEmpty
+            ? true
+            : trajet.villeArrivee.trim().toLowerCase().contains(arrivee);
 
-        final matchDate =
-            selectedDate == null ? true : _sameDate(trajet.dateDepart, selectedDate!);
+        final matchDate = selectedDate == null
+            ? true
+            : _sameDate(trajet.dateDepart, selectedDate!);
 
         final differentCities =
             trajet.villeDepart.trim().toLowerCase() !=
@@ -377,9 +366,9 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   }
 
   void afficherMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   List<String> get nomsVilles {
@@ -418,15 +407,19 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
         );
 
         if (!widget.showScaffold) {
-          return Container(
-            color: backgroundColor,
-            child: content,
-          );
+          return Container(color: backgroundColor, child: content);
         }
 
         return Scaffold(
           backgroundColor: backgroundColor,
+
           body: content,
+
+          floatingActionButton: AssistantAvatar(
+            onTap: () {
+              AssistantBottomSheet.show(context);
+            },
+          ),
         );
       },
     );
@@ -443,14 +436,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: isDark
-                  ? const [
-                      Color(0xFF0F172A),
-                      Color(0xFF081225),
-                    ]
-                  : [
-                      primaryBlue,
-                      const Color(0xFF1F3EDB),
-                    ],
+                  ? const [Color(0xFF0F172A), Color(0xFF081225)]
+                  : [primaryBlue, const Color(0xFF1F3EDB)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -607,11 +594,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.auto_awesome,
-                color: primaryBlue,
-                size: 22,
-              ),
+              Icon(Icons.auto_awesome, color: primaryBlue, size: 22),
               const SizedBox(width: 8),
               Text(
                 tr(
@@ -643,12 +626,14 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               es: 'Deslice hacia abajo para recargar los trayectos',
               ar: 'اسحب للأسفل لتحديث الرحلات',
             ),
-            backgroundColor:
-                isDark ? const Color(0xFF0F172A) : const Color(0xFFF0F4FF),
+            backgroundColor: isDark
+                ? const Color(0xFF0F172A)
+                : const Color(0xFFF0F4FF),
             iconColor: primaryBlue,
             titleColor: primaryBlue,
-            subtitleColor:
-                isDark ? const Color(0xFFCBD5E1) : const Color(0xFF6A7FB8),
+            subtitleColor: isDark
+                ? const Color(0xFFCBD5E1)
+                : const Color(0xFF6A7FB8),
           ),
         ],
       ),
@@ -662,12 +647,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${tr(
-              fr: 'Trajets disponibles',
-              en: 'Available trips',
-              es: 'Trayectos disponibles',
-              ar: 'الرحلات المتاحة',
-            )} (${trajetsAffiches.length})',
+            '${tr(fr: 'Trajets disponibles', en: 'Available trips', es: 'Trayectos disponibles', ar: 'الرحلات المتاحة')} (${trajetsAffiches.length})',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w600,
@@ -735,10 +715,7 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
                     ar: 'مركبة',
                   ),
                   onReserve: () {
-                    context.push(
-                      AppRoutes.tripDetail,
-                      extra: trajet,
-                    );
+                    context.push(AppRoutes.tripDetail, extra: trajet);
                   },
                 );
               },
@@ -831,13 +808,16 @@ class _SearchableCityFieldState extends State<_SearchableCityField> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fillColor =
-        isDark ? const Color(0xFF111827) : const Color(0xFFF6F7FB);
-    final borderColor =
-        isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB);
+    final fillColor = isDark
+        ? const Color(0xFF111827)
+        : const Color(0xFFF6F7FB);
+    final borderColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE5E7EB);
     final textColor = isDark ? Colors.white : const Color(0xFF111827);
-    final hintColor =
-        isDark ? const Color(0xFF94A3B8) : const Color(0xFF9CA3AF);
+    final hintColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF9CA3AF);
     final popupColor = Theme.of(context).cardColor;
 
     return Autocomplete<String>(
@@ -853,20 +833,13 @@ class _SearchableCityFieldState extends State<_SearchableCityField> {
           return baseCities;
         }
 
-        return baseCities.where(
-          (city) => city.toLowerCase().contains(query),
-        );
+        return baseCities.where((city) => city.toLowerCase().contains(query));
       },
       onSelected: (value) {
         controller.text = value;
         widget.onChanged(value);
       },
-      fieldViewBuilder: (
-        context,
-        textController,
-        focusNode,
-        onFieldSubmitted,
-      ) {
+      fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
         if (textController.text != controller.text) {
           textController.text = controller.text;
           textController.selection = TextSelection.fromPosition(
@@ -879,31 +852,18 @@ class _SearchableCityFieldState extends State<_SearchableCityField> {
           decoration: BoxDecoration(
             color: fillColor,
             borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: borderColor,
-              width: 1,
-            ),
+            border: Border.all(color: borderColor, width: 1),
           ),
           child: TextField(
             controller: textController,
             focusNode: focusNode,
             onChanged: widget.onChanged,
-            style: TextStyle(
-              fontSize: 15,
-              color: textColor,
-            ),
+            style: TextStyle(fontSize: 15, color: textColor),
             decoration: InputDecoration(
               border: InputBorder.none,
               hintText: widget.hintText,
-              hintStyle: TextStyle(
-                fontSize: 14,
-                color: hintColor,
-              ),
-              prefixIcon: Icon(
-                widget.icon,
-                color: hintColor,
-                size: 22,
-              ),
+              hintStyle: TextStyle(fontSize: 14, color: hintColor),
+              prefixIcon: Icon(widget.icon, color: hintColor, size: 22),
               suffixIcon: Icon(
                 Icons.keyboard_arrow_down_rounded,
                 color: hintColor,
@@ -970,13 +930,16 @@ class _InputDisplayBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fillColor =
-        isDark ? const Color(0xFF111827) : const Color(0xFFF6F7FB);
-    final borderColor =
-        isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB);
+    final fillColor = isDark
+        ? const Color(0xFF111827)
+        : const Color(0xFFF6F7FB);
+    final borderColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE5E7EB);
     final textColor = isDark ? Colors.white : const Color(0xFF111827);
-    final hintColor =
-        isDark ? const Color(0xFF94A3B8) : const Color(0xFF9CA3AF);
+    final hintColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF9CA3AF);
 
     return Container(
       height: 52,
@@ -984,34 +947,17 @@ class _InputDisplayBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: fillColor,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(
-          color: borderColor,
-          width: 1,
-        ),
+        border: Border.all(color: borderColor, width: 1),
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: hintColor,
-            size: 22,
-          ),
+          Icon(icon, color: hintColor, size: 22),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 15,
-                color: textColor,
-              ),
-            ),
+            child: Text(text, style: TextStyle(fontSize: 15, color: textColor)),
           ),
           if (trailingIcon != null)
-            Icon(
-              trailingIcon,
-              color: hintColor,
-              size: 21,
-            ),
+            Icon(trailingIcon, color: hintColor, size: 21),
         ],
       ),
     );
@@ -1048,11 +994,7 @@ class _SuggestionCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: iconColor,
-            size: 22,
-          ),
+          Icon(icon, color: iconColor, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1109,21 +1051,23 @@ class _TripCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = Theme.of(context).cardColor;
-    final borderColor =
-        isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB);
+    final borderColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE5E7EB);
     final titleColor = isDark ? Colors.white : const Color(0xFF374151);
-    final subtitleColor =
-        isDark ? const Color(0xFFCBD5E1) : const Color(0xFF6B7280);
-    final chipColor = isDark ? const Color(0xFF1E293B) : const Color(0xFFF0F2F6);
+    final subtitleColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF6B7280);
+    final chipColor = isDark
+        ? const Color(0xFF1E293B)
+        : const Color(0xFFF0F2F6);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 13, 12, 12),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: borderColor,
-        ),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1155,20 +1099,14 @@ class _TripCard extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 7,
-              vertical: 4,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
             decoration: BoxDecoration(
               color: chipColor,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
               trajet.statut,
-              style: TextStyle(
-                color: subtitleColor,
-                fontSize: 10,
-              ),
+              style: TextStyle(color: subtitleColor, fontSize: 10),
             ),
           ),
           const SizedBox(height: 8),
@@ -1202,10 +1140,7 @@ class _TripCard extends StatelessWidget {
             textColor: subtitleColor,
           ),
           const Spacer(),
-          Container(
-            height: 1,
-            color: borderColor,
-          ),
+          Container(height: 1, color: borderColor),
           const SizedBox(height: 8),
           Text(
             trajet.prixFormate,
@@ -1263,21 +1198,14 @@ class _InfoLine extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(
-          icon,
-          color: iconColor,
-          size: 14,
-        ),
+        Icon(icon, color: iconColor, size: 14),
         const SizedBox(width: 4),
         Expanded(
           child: Text(
             text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 12,
-            ),
+            style: TextStyle(color: textColor, fontSize: 12),
           ),
         ),
       ],
@@ -1302,11 +1230,13 @@ class _EmptyTrajetCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = Theme.of(context).cardColor;
-    final borderColor =
-        isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB);
+    final borderColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE5E7EB);
     final titleColor = isDark ? Colors.white : const Color(0xFF374151);
-    final subtitleColor =
-        isDark ? const Color(0xFFCBD5E1) : const Color(0xFF6B7280);
+    final subtitleColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF6B7280);
 
     return Container(
       width: double.infinity,
@@ -1314,17 +1244,11 @@ class _EmptyTrajetCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: borderColor,
-        ),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
         children: [
-          Icon(
-            Icons.directions_bus_outlined,
-            size: 44,
-            color: subtitleColor,
-          ),
+          Icon(Icons.directions_bus_outlined, size: 44, color: subtitleColor),
           const SizedBox(height: 12),
           Text(
             title,
@@ -1338,10 +1262,7 @@ class _EmptyTrajetCard extends StatelessWidget {
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: subtitleColor,
-            ),
+            style: TextStyle(fontSize: 13, color: subtitleColor),
           ),
           const SizedBox(height: 14),
           OutlinedButton.icon(

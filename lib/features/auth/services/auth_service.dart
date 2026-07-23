@@ -21,9 +21,11 @@ class AuthService {
     if (data is Map) {
       final map = Map<String, dynamic>.from(data);
       final message = map['message']?.toString() ?? '';
+
       if (message.trim().isNotEmpty) {
         return message.trim();
       }
+
       return map.toString();
     }
 
@@ -31,22 +33,43 @@ class AuthService {
   }
 
   String _normalizeLoginError(DioException e) {
-    final rawMessage = _extractReadableError(e.response?.data).toLowerCase();
+    final rawMessage =
+        _extractReadableError(e.response?.data).toLowerCase();
 
-    if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+    if (e.response?.statusCode == 401 ||
+        e.response?.statusCode == 403) {
       return 'Numéro de téléphone ou mot de passe incorrect.';
     }
 
-    if (rawMessage.contains('paramètres de connexion sont incorrectes') ||
-        rawMessage.contains('parametres de connexion sont incorrectes') ||
-        rawMessage.contains('connexion sont incorrectes') ||
-        rawMessage.contains('mot de passe incorrect') ||
-        rawMessage.contains('compte est bloqué') ||
-        rawMessage.contains('compte est inactif') ||
-        rawMessage.contains('bad credentials') ||
-        rawMessage.contains('login incorrect')) {
-      return rawMessage.contains('bloqué') || rawMessage.contains('inactif')
-          ? _extractReadableError(e.response?.data)
+    if (rawMessage.contains(
+          'paramètres de connexion sont incorrectes',
+        ) ||
+        rawMessage.contains(
+          'parametres de connexion sont incorrectes',
+        ) ||
+        rawMessage.contains(
+          'connexion sont incorrectes',
+        ) ||
+        rawMessage.contains(
+          'mot de passe incorrect',
+        ) ||
+        rawMessage.contains(
+          'compte est bloqué',
+        ) ||
+        rawMessage.contains(
+          'compte est inactif',
+        ) ||
+        rawMessage.contains(
+          'bad credentials',
+        ) ||
+        rawMessage.contains(
+          'login incorrect',
+        )) {
+      return rawMessage.contains('bloqué') ||
+              rawMessage.contains('inactif')
+          ? _extractReadableError(
+              e.response?.data,
+            )
           : 'Numéro de téléphone ou mot de passe incorrect.';
     }
 
@@ -54,7 +77,8 @@ class AuthService {
   }
 
   String _normalizeRegisterError(DioException e) {
-    final rawMessage = _extractReadableError(e.response?.data).toLowerCase();
+    final rawMessage =
+        _extractReadableError(e.response?.data).toLowerCase();
 
     if (rawMessage.contains('already') ||
         rawMessage.contains('existe') ||
@@ -75,35 +99,84 @@ class AuthService {
       final response = await apiClient.dio.post(
         ApiConstants.login,
         data: {
-          'telephone': telephone,
+          'username': telephone.trim(),
           'password': password,
         },
       );
 
-      final authResponse = AuthResponse.fromJson(response.data);
+      if (response.data is! Map) {
+        throw Exception(
+          'Réponse de connexion invalide.',
+        );
+      }
+
+      final authResponse = AuthResponse.fromJson(
+        Map<String, dynamic>.from(
+          response.data as Map,
+        ),
+      );
 
       if (authResponse.token.isEmpty) {
-        throw Exception('Token introuvable dans la réponse du serveur.');
+        throw Exception(
+          'Token introuvable dans la réponse du serveur.',
+        );
+      }
+
+      if (authResponse.id.isEmpty) {
+        throw Exception(
+          'Identifiant public introuvable dans la réponse du serveur.',
+        );
+      }
+
+      if (authResponse.numericId <= 0) {
+        throw Exception(
+          'Identifiant numérique introuvable dans la réponse du serveur.',
+        );
       }
 
       await secureStorageService.clearSession();
-      await secureStorageService.saveToken(authResponse.token);
+
+      await secureStorageService.saveToken(
+        authResponse.token,
+      );
 
       await secureStorageService.saveUserSession(
         userId: authResponse.id,
+        numericUserId: authResponse.numericId.toString(),
         fullName: authResponse.fullName,
-        telephone: authResponse.telephone,
+        telephone: authResponse.telephone.isNotEmpty
+            ? authResponse.telephone
+            : telephone.trim(),
       );
 
       if (authResponse.roles.isNotEmpty) {
-        await secureStorageService.saveRoles(authResponse.roles);
+        await secureStorageService.saveRoles(
+          authResponse.roles,
+        );
       }
 
       return authResponse;
     } on DioException catch (e) {
-      throw Exception(_normalizeLoginError(e));
+      print(
+        'LOGIN STATUS = ${e.response?.statusCode}',
+      );
+      print(
+        'LOGIN DATA = ${e.response?.data}',
+      );
+      print(
+        'LOGIN ERROR = ${e.message}',
+      );
+
+      throw Exception(
+        _normalizeLoginError(e),
+      );
     } catch (e) {
-      throw Exception(e.toString().replaceAll('Exception: ', ''));
+      throw Exception(
+        e.toString().replaceAll(
+              'Exception: ',
+              '',
+            ),
+      );
     }
   }
 
@@ -119,29 +192,52 @@ class AuthService {
         data: {
           'nom': fullName.trim(),
           'telephone': telephone.trim(),
-          if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+          if (email != null &&
+              email.trim().isNotEmpty)
+            'email': email.trim(),
           'password': password,
         },
       );
     } on DioException catch (e) {
-      throw Exception(_normalizeRegisterError(e));
+      throw Exception(
+        _normalizeRegisterError(e),
+      );
     } catch (e) {
-      throw Exception(e.toString().replaceAll('Exception: ', ''));
+      throw Exception(
+        e.toString().replaceAll(
+              'Exception: ',
+              '',
+            ),
+      );
     }
   }
 
-  Future<void> forgotPassword({required String telephone}) async {
+  Future<void> forgotPassword({
+    required String telephone,
+  }) async {
     try {
       await apiClient.dio.post(
         ApiConstants.forgotPassword,
-        data: {'telephone': telephone.trim()},
+        data: {
+          'telephone': telephone.trim(),
+        },
       );
     } on DioException catch (e) {
-      throw Exception(_extractReadableError(e.response?.data).isNotEmpty
-          ? _extractReadableError(e.response?.data)
-          : 'Erreur lors de la demande de réinitialisation.');
+      final readableError =
+          _extractReadableError(e.response?.data);
+
+      throw Exception(
+        readableError.isNotEmpty
+            ? readableError
+            : 'Erreur lors de la demande de réinitialisation.',
+      );
     } catch (e) {
-      throw Exception(e.toString().replaceAll('Exception: ', ''));
+      throw Exception(
+        e.toString().replaceAll(
+              'Exception: ',
+              '',
+            ),
+      );
     }
   }
 
