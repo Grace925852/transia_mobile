@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
+import 'package:transia_mobile/features/chauffeur/models/billet_lookup_model.dart';
 import 'package:transia_mobile/features/chauffeur/models/chauffeur_passenger_model.dart';
 import 'package:transia_mobile/features/chauffeur/models/chauffeur_trip_model.dart';
 import 'package:transia_mobile/features/chauffeur/services/chauffeur_service.dart';
@@ -69,18 +70,101 @@ class _ChauffeurScanScreenState extends State<ChauffeurScanScreen> {
 
     if (!mounted) return;
 
-    if (passenger == null) {
+    if (passenger != null) {
       setState(() {
-        errorMessage = 'QR invalide ou billet introuvable pour ce trajet.';
+        foundPassenger = passenger;
         isProcessing = false;
       });
       return;
     }
 
-    setState(() {
-      foundPassenger = passenger;
-      isProcessing = false;
-    });
+    // Le billet ne fait pas partie de la liste locale de ce trajet : on interroge le backend
+    // (lecture seule) pour savoir s'il s'agit d'un QR totalement inconnu, d'un billet d'un autre
+    // trajet (passé ou à venir), ou d'un billet de ce trajet mais pas encore payé/déjà utilisé.
+    try {
+      final lookup = await chauffeurService.lookupBilletByQr(
+        rawValue.trim(),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        errorMessage = _buildNotFoundMessage(lookup);
+        isProcessing = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        errorMessage =
+            'QR invalide : ce billet est introuvable dans le système.';
+        isProcessing = false;
+      });
+    }
+  }
+
+  String _buildNotFoundMessage(BilletLookupModel? lookup) {
+    if (lookup == null) {
+      return 'QR invalide : ce billet est introuvable dans le système.';
+    }
+
+    if (lookup.trajetId != null && lookup.trajetId == widget.trip.id) {
+      switch (lookup.statut.toUpperCase()) {
+        case 'EN_ATTENTE':
+          return 'Ce billet n\'est pas encore payé — l\'embarquement n\'est pas autorisé.';
+        case 'ANNULE':
+          return 'Ce billet a été annulé.';
+        case 'UTILISE':
+          return 'Ce billet a déjà été validé pour l\'embarquement.';
+        default:
+          return 'Ce billet appartient à ce trajet mais n\'a pas pu être vérifié (statut : ${lookup.statut}).';
+      }
+    }
+
+    final quand = _situerDansLeTemps(lookup.dateDepart, lookup.heureDepart);
+    final trajetLabel = lookup.trajetInfo.trim();
+    final dateLabel = _formatDate(lookup.dateDepart, lookup.heureDepart);
+
+    final details = [
+      if (trajetLabel.isNotEmpty) trajetLabel,
+      if (dateLabel.isNotEmpty) dateLabel,
+    ].join(', ');
+
+    final detailsSuffix = details.isNotEmpty ? ' ($details)' : '';
+
+    return 'Ce billet appartient à $quand$detailsSuffix — pas à ce trajet-ci.';
+  }
+
+  String _situerDansLeTemps(String date, String heure) {
+    final dt = _parseTrajetDateTime(date, heure);
+    if (dt == null) return 'un autre trajet';
+    return dt.isBefore(DateTime.now())
+        ? 'un trajet déjà passé'
+        : 'un trajet à venir';
+  }
+
+  String _formatDate(String date, String heure) {
+    final dt = _parseTrajetDateTime(date, heure);
+    if (dt == null) return '';
+
+    final jour = dt.day.toString().padLeft(2, '0');
+    final mois = dt.month.toString().padLeft(2, '0');
+    final heureStr = dt.hour.toString().padLeft(2, '0');
+    final minuteStr = dt.minute.toString().padLeft(2, '0');
+
+    return 'le $jour/$mois/${dt.year} à $heureStr:$minuteStr';
+  }
+
+  DateTime? _parseTrajetDateTime(String date, String heure) {
+    if (date.trim().isEmpty) return null;
+
+    final normalizedHeure = heure.trim().isEmpty ? '00:00:00' : heure.trim();
+
+    try {
+      return DateTime.parse('${date.trim()}T$normalizedHeure');
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> markPresent() async {

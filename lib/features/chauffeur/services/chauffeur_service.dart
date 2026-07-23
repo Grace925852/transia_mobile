@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
+import 'package:transia_mobile/features/chauffeur/models/billet_lookup_model.dart';
 import 'package:transia_mobile/features/chauffeur/models/chauffeur_passenger_model.dart';
 import 'package:transia_mobile/features/chauffeur/models/chauffeur_trip_model.dart';
 
@@ -300,5 +301,30 @@ class ChauffeurService {
     }
 
     throw Exception('QR invalide ou billet introuvable.');
+  }
+
+  // Recherche en lecture seule (n'appelle pas /billets/valider, qui marque le billet comme
+  // utilisé) : sert uniquement à savoir pourquoi un QR scanné n'est pas dans la liste du trajet
+  // en cours (billet inconnu, ou billet d'un autre trajet passé/à venir).
+  Future<BilletLookupModel?> lookupBilletByQr(String qrCode) async {
+    try {
+      final response = await apiClient.dio.get(
+        '/api/v1/billets/rechercher',
+        queryParameters: {'qrCode': qrCode},
+      );
+
+      if (response.data is! Map) {
+        return null;
+      }
+
+      return BilletLookupModel.fromJson(
+        Map<String, dynamic>.from(response.data as Map),
+      );
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return null;
+      }
+      rethrow;
+    }
   }
 }
