@@ -102,7 +102,7 @@ class TripTrackingModel {
   final String villeArrivee;
 
   final String chauffeurNom;
-  final int? chauffeurId;
+  final String? chauffeurId;
 
   final String vehicule;
   final String immatriculation;
@@ -158,9 +158,7 @@ class TripTrackingModel {
           (json['villeArrivee'] ?? '').toString(),
       chauffeurNom:
           (json['chauffeurNom'] ?? '').toString(),
-      chauffeurId: int.tryParse(
-        json['chauffeurId']?.toString() ?? '',
-      ),
+      chauffeurId: json['chauffeurId']?.toString(),
       vehicule:
           (json['vehicule'] ?? '').toString(),
       immatriculation:
@@ -209,7 +207,7 @@ class TripTrackingModel {
     String? villeDepart,
     String? villeArrivee,
     String? chauffeurNom,
-    int? chauffeurId,
+    String? chauffeurId,
     String? vehicule,
     String? immatriculation,
     String? dateDepart,

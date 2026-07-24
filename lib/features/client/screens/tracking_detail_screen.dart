@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:transia_mobile/core/location/location_adress_service.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
 import 'package:transia_mobile/core/settings/app_preferences_controller.dart';
@@ -43,6 +45,9 @@ class _TrackingDetailScreenState
   double? lastGeocodedLongitude;
 
   ClientTripTrackingModel? tracking;
+
+  final MapController mapController = MapController();
+  bool isMapReady = false;
 
   AppPreferencesController get prefs =>
       AppPreferencesController.instance;
@@ -124,6 +129,8 @@ class _TrackingDetailScreenState
         isRefreshing = false;
       });
 
+      _moveMapToPosition(result?.dernierePosition);
+
       await _updateReadableAddress(
         result?.dernierePosition,
       );
@@ -138,6 +145,19 @@ class _TrackingDetailScreenState
         errorMessage = _cleanError(error);
       });
     }
+  }
+
+  void _moveMapToPosition(
+    ClientGpsPositionModel? position,
+  ) {
+    if (position == null || !isMapReady) {
+      return;
+    }
+
+    mapController.move(
+      LatLng(position.latitude, position.longitude),
+      mapController.camera.zoom,
+    );
   }
 
   Future<void> _updateReadableAddress(
@@ -435,6 +455,107 @@ class _TrackingDetailScreenState
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMapCard(
+    ThemeData theme,
+  ) {
+    final position = tracking?.dernierePosition;
+
+    if (position == null) {
+      return const SizedBox.shrink();
+    }
+
+    final busPoint = LatLng(
+      position.latitude,
+      position.longitude,
+    );
+
+    final color = _statusColor(tracking);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: SizedBox(
+        height: 220,
+        child: Stack(
+          children: [
+            FlutterMap(
+              mapController: mapController,
+              options: MapOptions(
+                initialCenter: busPoint,
+                initialZoom: 15,
+                onMapReady: () {
+                  isMapReady = true;
+                },
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate:
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName:
+                      'com.transia.transia_mobile',
+                ),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: busPoint,
+                      width: 46,
+                      height: 46,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white,
+                            width: 3,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black
+                                  .withValues(alpha: 0.25),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.directions_bus_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            Positioned(
+              right: 10,
+              bottom: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.cardColor.withValues(
+                    alpha: 0.9,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  '© OpenStreetMap',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -824,6 +945,10 @@ class _TrackingDetailScreenState
               if (tracking == null)
                 _buildNoTrackingCard(theme)
               else ...[
+                if (tracking!.dernierePosition != null) ...[
+                  _buildMapCard(theme),
+                  const SizedBox(height: 16),
+                ],
                 _buildPositionCard(theme),
                 const SizedBox(height: 16),
                 _buildTripInformationCard(

@@ -23,9 +23,14 @@ import 'package:transia_mobile/features/client/screens/ticket_details_screen.dar
 import 'package:transia_mobile/features/client/screens/tracking_detail_screen.dart';
 import 'package:transia_mobile/features/client/screens/trip_detail_screen.dart';
 import 'package:transia_mobile/features/client/screens/trip_list_screen.dart';
-import 'package:transia_mobile/features/livreur/models/livreur_colis_model.dart';
-import 'package:transia_mobile/features/livreur/screens/livreur_colis_detail_screen.dart';
+import 'package:transia_mobile/features/client/screens/client_demandes_collecte_screen.dart';
+import 'package:transia_mobile/features/client/screens/agences_screen.dart';
+import 'package:transia_mobile/features/client/screens/agence_detail_screen.dart';
+import 'package:transia_mobile/features/client/models/agence_model.dart';
 import 'package:transia_mobile/features/livreur/screens/livreur_main_screen.dart';
+import 'package:transia_mobile/features/livreur/screens/livreur_colis_detail_screen.dart';
+import 'package:transia_mobile/features/livreur/screens/livreur_demandes_collecte_screen.dart';
+import 'package:transia_mobile/features/livreur/models/livreur_colis_model.dart';
 import 'package:transia_mobile/shared/screens/edit_profile_screen.dart';
 
 class AppRoutes {
@@ -38,11 +43,11 @@ class AppRoutes {
   static const String chauffeur = '/chauffeur';
   static const String chauffeurPassengers = '/chauffeur/passagers';
   static const String chauffeurScan = '/chauffeur/scan';
-  static const String chauffeurReportProblem =
-      '/chauffeur/report-problem';
+  static const String chauffeurReportProblem = '/chauffeur/report-problem';
 
   static const String livreur = '/livreur';
   static const String livreurColisDetail = '/livreur/colis-detail';
+  static const String livreurDemandesCollecte = '/livreur/demandes-collecte';
 
   static const String tripList = '/trip-list';
   static const String tripDetail = '/trip-detail';
@@ -60,6 +65,11 @@ class AppRoutes {
   static const String clientColis = '/client-colis';
   static const String clientColisForm = '/client-colis/nouveau';
   static const String clientColisDetail = '/client-colis/detail';
+  static const String clientDemandesCollecte =
+      '/client-colis/demandes-collecte';
+
+  static const String clientAgences = '/client-agences';
+  static const String clientAgenceDetail = '/client-agences/detail';
 }
 
 const bool launchClientOnly = true;
@@ -100,16 +110,14 @@ final GoRouter appRouter = GoRouter(
 
         return ChauffeurScanScreen(
           trip: data['trip'] as ChauffeurTripModel,
-          passengers:
-              data['passengers'] as List<ChauffeurPassengerModel>,
+          passengers: data['passengers'] as List<ChauffeurPassengerModel>,
         );
       },
     ),
     GoRoute(
       path: AppRoutes.chauffeurReportProblem,
-      builder: (context, state) => ChauffeurReportProblemScreen(
-        trip: state.extra as ChauffeurTripModel,
-      ),
+      builder: (context, state) =>
+          ChauffeurReportProblemScreen(trip: state.extra as ChauffeurTripModel),
     ),
     GoRoute(
       path: AppRoutes.livreur,
@@ -117,9 +125,12 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.livreurColisDetail,
-      builder: (context, state) => LivreurColisDetailScreen(
-        colis: state.extra as LivreurColisModel,
-      ),
+      builder: (context, state) =>
+          LivreurColisDetailScreen(colis: state.extra as LivreurColisModel),
+    ),
+    GoRoute(
+      path: AppRoutes.livreurDemandesCollecte,
+      builder: (context, state) => const LivreurDemandesCollecteScreen(),
     ),
     GoRoute(
       path: AppRoutes.tripList,
@@ -137,9 +148,8 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.tripDetail,
-      builder: (context, state) => TripDetailScreen(
-        trajet: state.extra as TrajetModel,
-      ),
+      builder: (context, state) =>
+          TripDetailScreen(trajet: state.extra as TrajetModel),
     ),
     GoRoute(
       path: AppRoutes.bookingSummary,
@@ -149,13 +159,12 @@ final GoRouter appRouter = GoRouter(
         return BookingSummaryScreen(
           trajet: data['trajet'] as TrajetModel,
           nombreSieges: data['nombreSieges'] as int,
-          selectedSeats:
-              (data['selectedSeats'] as List<dynamic>? ?? [])
-                  .map((element) {
-                    return int.tryParse(element.toString()) ?? 0;
-                  })
-                  .where((element) => element > 0)
-                  .toList(),
+          selectedSeats: (data['selectedSeats'] as List<dynamic>? ?? [])
+              .map((element) {
+                return int.tryParse(element.toString()) ?? 0;
+              })
+              .where((element) => element > 0)
+              .toList(),
         );
       },
     ),
@@ -167,21 +176,18 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.payment,
-      builder: (context, state) => PaymentScreen(
-        reservation: state.extra as ReservationModel,
-      ),
+      builder: (context, state) =>
+          PaymentScreen(reservation: state.extra as ReservationModel),
     ),
     GoRoute(
       path: AppRoutes.ticketDetails,
-      builder: (context, state) => TicketDetailsScreen(
-        reservation: state.extra as ReservationModel,
-      ),
+      builder: (context, state) =>
+          TicketDetailsScreen(reservation: state.extra as ReservationModel),
     ),
     GoRoute(
       path: AppRoutes.refundRequest,
-      builder: (context, state) => RefundRequestScreen(
-        reservation: state.extra as ReservationModel,
-      ),
+      builder: (context, state) =>
+          RefundRequestScreen(reservation: state.extra as ReservationModel),
     ),
     GoRoute(
       path: AppRoutes.history,
@@ -189,15 +195,13 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.trackingDetail,
-      builder: (context, state) => TrackingDetailScreen(
-        reservation: state.extra as ReservationModel,
-      ),
+      builder: (context, state) =>
+          TrackingDetailScreen(reservation: state.extra as ReservationModel),
     ),
     GoRoute(
       path: AppRoutes.rating,
-      builder: (context, state) => RatingScreen(
-        reservation: state.extra as ReservationModel,
-      ),
+      builder: (context, state) =>
+          RatingScreen(reservation: state.extra as ReservationModel),
     ),
     GoRoute(
       path: AppRoutes.clientColis,
@@ -209,9 +213,21 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: AppRoutes.clientColisDetail,
-      builder: (context, state) => ClientColisDetailScreen(
-        colis: state.extra as ColisModel,
-      ),
+      builder: (context, state) =>
+          ClientColisDetailScreen(colis: state.extra as ColisModel),
+    ),
+    GoRoute(
+      path: AppRoutes.clientDemandesCollecte,
+      builder: (context, state) => const ClientDemandesCollecteScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.clientAgences,
+      builder: (context, state) => const AgencesScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.clientAgenceDetail,
+      builder: (context, state) =>
+          AgenceDetailScreen(agence: state.extra as AgenceModel),
     ),
   ],
 );

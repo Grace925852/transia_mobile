@@ -12,6 +12,7 @@ import 'package:transia_mobile/features/client/models/ville_model.dart';
 import 'package:transia_mobile/features/client/services/trajet_service.dart';
 import 'package:transia_mobile/features/client/services/ville_service.dart';
 import 'package:transia_mobile/shared/widgets/user_avatar.dart';
+import 'package:transia_mobile/shared/widgets/vehicule_thumbnail.dart';
 
 class ClientHomeScreen extends StatefulWidget {
   final bool showScaffold;
@@ -396,6 +397,8 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               padding: EdgeInsets.zero,
               children: [
                 _buildTopSection(primaryBlue, textColor, isDark),
+                const SizedBox(height: 20),
+                _buildAgencesShortcut(primaryBlue, textColor, isDark),
                 const SizedBox(height: 24),
                 _buildSuggestionsSection(primaryBlue, textColor, isDark),
                 const SizedBox(height: 26),
@@ -582,6 +585,80 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
     );
   }
 
+  Widget _buildAgencesShortcut(
+    Color primaryBlue,
+    Color textColor,
+    bool isDark,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: GestureDetector(
+        onTap: () => context.push(AppRoutes.clientAgences),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: primaryBlue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.store_rounded, color: primaryBlue, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tr(
+                        fr: 'Nos Agences',
+                        en: 'Our Agencies',
+                        es: 'Nuestras Agencias',
+                        ar: 'وكالاتنا',
+                      ),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      tr(
+                        fr: 'Trouvez un point de service près de vous',
+                        en: 'Find a service point near you',
+                        es: 'Encuentre un punto de servicio cerca de usted',
+                        ar: 'اعثر على نقطة خدمة بالقرب منك',
+                      ),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: Color(0xFF9CA3AF)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSuggestionsSection(
     Color primaryBlue,
     Color textColor,
@@ -685,38 +762,52 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
               onReset: reinitialiserRecherche,
             )
           else
-            GridView.builder(
-              itemCount: trajetsAffiches.length,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.50,
-              ),
-              itemBuilder: (context, index) {
-                final trajet = trajetsAffiches[index];
+            // Wrap plutôt qu'un GridView à ratio fixe : chaque carte ne prend que la hauteur que son
+            // contenu exige (avant, un Spacer() forçait un grand vide pour remplir un ratio 1:2 imposé
+            // à toutes les cartes). Le nombre de colonnes s'adapte à la largeur disponible.
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const spacing = 12.0;
+                const minCardWidth = 168.0;
+                final columns =
+                    (constraints.maxWidth / (minCardWidth + spacing))
+                        .floor()
+                        .clamp(2, 4);
+                final cardWidth =
+                    (constraints.maxWidth - spacing * (columns - 1)) / columns;
 
-                return _TripCard(
-                  trajet: trajet,
-                  iconColor: _getTripColor(index),
-                  buttonColor: primaryBlue,
-                  reserveLabel: tr(
-                    fr: 'Réserver',
-                    en: 'Book',
-                    es: 'Reservar',
-                    ar: 'احجز',
-                  ),
-                  vehicleLabel: tr(
-                    fr: 'Véhicule',
-                    en: 'Vehicle',
-                    es: 'Vehículo',
-                    ar: 'مركبة',
-                  ),
-                  onReserve: () {
-                    context.push(AppRoutes.tripDetail, extra: trajet);
-                  },
+                return Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  children: [
+                    for (int index = 0; index < trajetsAffiches.length; index++)
+                      SizedBox(
+                        width: cardWidth,
+                        child: _TripCard(
+                          trajet: trajetsAffiches[index],
+                          iconColor: _getTripColor(index),
+                          buttonColor: primaryBlue,
+                          reserveLabel: tr(
+                            fr: 'Réserver',
+                            en: 'Book',
+                            es: 'Reservar',
+                            ar: 'احجز',
+                          ),
+                          vehicleLabel: tr(
+                            fr: 'Véhicule',
+                            en: 'Vehicle',
+                            es: 'Vehículo',
+                            ar: 'مركبة',
+                          ),
+                          onReserve: () {
+                            context.push(
+                              AppRoutes.tripDetail,
+                              extra: trajetsAffiches[index],
+                            );
+                          },
+                        ),
+                      ),
+                  ],
                 );
               },
             ),
@@ -760,7 +851,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   }
 }
 
-class _SearchableCityField extends StatefulWidget {
+// Sélecteur de ville en bottom sheet plutôt qu'un Autocomplete "dropdown" : le
+// positionnement de la liste d'un Autocomplete via CompositedTransformFollower est
+// fragile dans un ListView scrollable (mauvais alignement, coupé par le clavier).
+// Un bottom sheet est natif, toujours bien positionné et plus lisible sur mobile.
+class _SearchableCityField extends StatelessWidget {
   final IconData icon;
   final String hintText;
   final String? initialValue;
@@ -777,141 +872,237 @@ class _SearchableCityField extends StatefulWidget {
     required this.onChanged,
   });
 
-  @override
-  State<_SearchableCityField> createState() => _SearchableCityFieldState();
-}
+  Future<void> _ouvrirSelecteur(BuildContext context) async {
+    final selection = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _CitySelectorSheet(
+        title: hintText,
+        cities: cities,
+        excludedValue: excludedValue,
+        selectedValue: initialValue,
+      ),
+    );
 
-class _SearchableCityFieldState extends State<_SearchableCityField> {
-  late final TextEditingController controller;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = TextEditingController(text: widget.initialValue ?? '');
-  }
-
-  @override
-  void didUpdateWidget(covariant _SearchableCityField oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if ((widget.initialValue ?? '') != controller.text) {
-      controller.text = widget.initialValue ?? '';
+    if (selection != null) {
+      onChanged(selection);
     }
   }
 
   @override
+  Widget build(BuildContext context) {
+    final hasValue = (initialValue ?? '').trim().isNotEmpty;
+
+    return GestureDetector(
+      onTap: () => _ouvrirSelecteur(context),
+      child: _InputDisplayBox(
+        icon: icon,
+        text: hasValue ? initialValue! : hintText,
+        isPlaceholder: !hasValue,
+        trailingIcon: Icons.keyboard_arrow_down_rounded,
+      ),
+    );
+  }
+}
+
+class _CitySelectorSheet extends StatefulWidget {
+  final String title;
+  final List<String> cities;
+  final String? excludedValue;
+  final String? selectedValue;
+
+  const _CitySelectorSheet({
+    required this.title,
+    required this.cities,
+    required this.excludedValue,
+    required this.selectedValue,
+  });
+
+  @override
+  State<_CitySelectorSheet> createState() => _CitySelectorSheetState();
+}
+
+class _CitySelectorSheetState extends State<_CitySelectorSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  late List<String> _villesFiltrees;
+
+  @override
+  void initState() {
+    super.initState();
+    _villesFiltrees = _filtrer('');
+  }
+
+  @override
   void dispose() {
-    controller.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  List<String> _filtrer(String terme) {
+    final excluded = widget.excludedValue?.trim().toLowerCase() ?? '';
+    final query = terme.trim().toLowerCase();
+
+    return widget.cities.where((city) {
+      if (excluded.isNotEmpty && city.toLowerCase() == excluded) return false;
+      if (query.isEmpty) return true;
+      return city.toLowerCase().contains(query);
+    }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fillColor = isDark
-        ? const Color(0xFF111827)
-        : const Color(0xFFF6F7FB);
-    final borderColor = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFE5E7EB);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final sheetColor = isDark ? const Color(0xFF111827) : Colors.white;
     final textColor = isDark ? Colors.white : const Color(0xFF111827);
     final hintColor = isDark
         ? const Color(0xFF94A3B8)
         : const Color(0xFF9CA3AF);
-    final popupColor = Theme.of(context).cardColor;
+    final fillColor = isDark
+        ? const Color(0xFF1E293B)
+        : const Color(0xFFF6F7FB);
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    return Autocomplete<String>(
-      optionsBuilder: (TextEditingValue textEditingValue) {
-        final query = textEditingValue.text.trim().toLowerCase();
-        final excluded = widget.excludedValue?.trim().toLowerCase() ?? '';
-
-        final baseCities = widget.cities.where((city) {
-          return excluded.isEmpty || city.toLowerCase() != excluded;
-        });
-
-        if (query.isEmpty) {
-          return baseCities;
-        }
-
-        return baseCities.where((city) => city.toLowerCase().contains(query));
-      },
-      onSelected: (value) {
-        controller.text = value;
-        widget.onChanged(value);
-      },
-      fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
-        if (textController.text != controller.text) {
-          textController.text = controller.text;
-          textController.selection = TextSelection.fromPosition(
-            TextPosition(offset: textController.text.length),
-          );
-        }
-
-        return Container(
-          height: 52,
-          decoration: BoxDecoration(
-            color: fillColor,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: borderColor, width: 1),
-          ),
-          child: TextField(
-            controller: textController,
-            focusNode: focusNode,
-            onChanged: widget.onChanged,
-            style: TextStyle(fontSize: 15, color: textColor),
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              hintText: widget.hintText,
-              hintStyle: TextStyle(fontSize: 14, color: hintColor),
-              prefixIcon: Icon(widget.icon, color: hintColor, size: 22),
-              suffixIcon: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: hintColor,
-                size: 25,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 14,
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.65,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        expand: false,
+        builder: (context, scrollController) {
+          return Container(
+            decoration: BoxDecoration(
+              color: sheetColor,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
               ),
             ),
-          ),
-        );
-      },
-      optionsViewBuilder: (context, onSelected, options) {
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 6,
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              width: MediaQuery.of(context).size.width - 72,
-              constraints: const BoxConstraints(maxHeight: 210),
-              decoration: BoxDecoration(
-                color: popupColor,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: ListView.builder(
-                padding: EdgeInsets.zero,
-                itemCount: options.length,
-                itemBuilder: (context, index) {
-                  final option = options.elementAt(index);
-
-                  return ListTile(
-                    dense: true,
-                    title: Text(
-                      option,
-                      style: TextStyle(fontSize: 14, color: textColor),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: hintColor.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.title,
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: textColor,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: Icon(Icons.close_rounded, color: hintColor),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: fillColor,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    onTap: () {
-                      onSelected(option);
-                    },
-                  );
-                },
-              ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.search_rounded, color: hintColor, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _searchController,
+                            autofocus: false,
+                            style: TextStyle(fontSize: 15, color: textColor),
+                            decoration: InputDecoration(
+                              border: InputBorder.none,
+                              isDense: true,
+                              hintText: 'Rechercher une ville...',
+                              hintStyle: TextStyle(
+                                fontSize: 14,
+                                color: hintColor,
+                              ),
+                            ),
+                            onChanged: (value) {
+                              setState(() => _villesFiltrees = _filtrer(value));
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: _villesFiltrees.isEmpty
+                      ? Center(
+                          child: Text(
+                            'Aucune ville trouvée',
+                            style: TextStyle(color: hintColor, fontSize: 14),
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: scrollController,
+                          padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                          itemCount: _villesFiltrees.length,
+                          itemBuilder: (context, index) {
+                            final ville = _villesFiltrees[index];
+                            final selected = ville == widget.selectedValue;
+
+                            return ListTile(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              leading: Icon(
+                                Icons.location_on_outlined,
+                                color: selected
+                                    ? const Color(0xFF3158F5)
+                                    : hintColor,
+                              ),
+                              title: Text(
+                                ville,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: selected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: selected
+                                      ? const Color(0xFF3158F5)
+                                      : textColor,
+                                ),
+                              ),
+                              trailing: selected
+                                  ? const Icon(
+                                      Icons.check_circle_rounded,
+                                      color: Color(0xFF3158F5),
+                                    )
+                                  : null,
+                              onTap: () => Navigator.of(context).pop(ville),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
@@ -920,11 +1111,13 @@ class _InputDisplayBox extends StatelessWidget {
   final IconData icon;
   final String text;
   final IconData? trailingIcon;
+  final bool isPlaceholder;
 
   const _InputDisplayBox({
     required this.icon,
     required this.text,
     this.trailingIcon,
+    this.isPlaceholder = false,
   });
 
   @override
@@ -954,7 +1147,14 @@ class _InputDisplayBox extends StatelessWidget {
           Icon(icon, color: hintColor, size: 22),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(text, style: TextStyle(fontSize: 15, color: textColor)),
+            child: Text(
+              text,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 15,
+                color: isPlaceholder ? hintColor : textColor,
+              ),
+            ),
           ),
           if (trailingIcon != null)
             Icon(trailingIcon, color: hintColor, size: 21),
@@ -1063,7 +1263,7 @@ class _TripCard extends StatelessWidget {
         : const Color(0xFFF0F2F6);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 13, 12, 12),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(18),
@@ -1071,59 +1271,53 @@ class _TripCard extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            height: 46,
-            width: 46,
-            decoration: BoxDecoration(
-              color: iconColor,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.directions_bus_filled_rounded,
-              color: Colors.white,
-              size: 26,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              VehiculeThumbnail(imageBase64: trajet.vehiculeImage, size: 40),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${trajet.villeDepart} → ${trajet.villeArrivee}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: titleColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: chipColor,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        trajet.statut,
+                        style: TextStyle(
+                          color: subtitleColor,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            '${trajet.villeDepart} → ${trajet.villeArrivee}',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: titleColor,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              height: 1.15,
-            ),
-          ),
-          const SizedBox(height: 7),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-            decoration: BoxDecoration(
-              color: chipColor,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              trajet.statut,
-              style: TextStyle(color: subtitleColor, fontSize: 10),
-            ),
-          ),
-          const SizedBox(height: 8),
-          _InfoLine(
-            icon: Icons.location_on_outlined,
-            iconColor: const Color(0xFF4CD964),
-            text: trajet.villeDepart,
-            textColor: subtitleColor,
-          ),
-          const SizedBox(height: 4),
-          _InfoLine(
-            icon: Icons.location_on_outlined,
-            iconColor: const Color(0xFFE5485D),
-            text: trajet.villeArrivee,
-            textColor: subtitleColor,
-          ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 10),
           _InfoLine(
             icon: Icons.access_time_rounded,
             iconColor: subtitleColor,
@@ -1139,18 +1333,25 @@ class _TripCard extends StatelessWidget {
                 : trajet.vehiculeImmatriculation,
             textColor: subtitleColor,
           ),
-          const Spacer(),
+          const SizedBox(height: 10),
           Container(height: 1, color: borderColor),
           const SizedBox(height: 8),
-          Text(
-            trajet.prixFormate,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: titleColor,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(
+                  trajet.prixFormate,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: titleColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           SizedBox(

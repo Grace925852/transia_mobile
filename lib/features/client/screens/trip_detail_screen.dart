@@ -66,66 +66,16 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     _loadOccupiedSeats();
   }
 
-  Set<String> _extractSeatsFromDynamicList(dynamic data) {
-    final Set<String> result = {};
-
-    if (data is List) {
-      for (final item in data) {
-        if (item == null) continue;
-
-        if (item is Map) {
-          final map = Map<String, dynamic>.from(item);
-          final seatValue = map['numeroSiege'] ??
-              map['numero_siege'] ??
-              map['seatNumber'] ??
-              map['siege'];
-
-          if (seatValue != null) {
-            final text = seatValue.toString().trim();
-            if (text.isNotEmpty && text.toLowerCase() != 'null') {
-              result.add(text);
-            }
-          }
-        } else {
-          final text = item.toString().trim();
-          if (text.isNotEmpty && text.toLowerCase() != 'null') {
-            result.add(text);
-          }
-        }
-      }
-    }
-
-    return result;
-  }
-
   Future<void> _loadOccupiedSeats() async {
     setState(() {
       isLoadingSeats = true;
     });
 
     try {
-      final reservations = await reservationService.getReservations();
-      final Set<String> freshOccupiedSeats = {};
-
-      for (final reservation in reservations) {
-        if (reservation.trajetId != widget.trajet.id) continue;
-
-        final raw = reservation.rawData;
-        freshOccupiedSeats.addAll(_extractSeatsFromDynamicList(raw['billets']));
-        freshOccupiedSeats.addAll(_extractSeatsFromDynamicList(raw['tickets']));
-        freshOccupiedSeats
-            .addAll(_extractSeatsFromDynamicList(raw['billetEntities']));
-        freshOccupiedSeats
-            .addAll(_extractSeatsFromDynamicList(raw['reservationBillets']));
-        freshOccupiedSeats
-            .addAll(_extractSeatsFromDynamicList(raw['selectedSeats']));
-        freshOccupiedSeats
-            .addAll(_extractSeatsFromDynamicList(raw['numerosSieges']));
-        freshOccupiedSeats
-            .addAll(_extractSeatsFromDynamicList(raw['seatNumbers']));
-        freshOccupiedSeats
-            .addAll(_extractSeatsFromDynamicList(raw['siegesChoisis']));
-      }
+      // Endpoint dédié et scopé par trajet, plutôt que de charger toutes les réservations de la
+      // plateforme (qui de toute façon n'est plus accessible à un client) et filtrer en local.
+      final freshOccupiedSeats =
+          await reservationService.getOccupiedSeats(widget.trajet.id);
 
       if (!mounted) return;
 

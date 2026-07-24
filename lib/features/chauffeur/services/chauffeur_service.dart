@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
+import 'package:transia_mobile/features/chauffeur/models/billet_lookup_model.dart';
 import 'package:transia_mobile/features/chauffeur/models/chauffeur_passenger_model.dart';
 import 'package:transia_mobile/features/chauffeur/models/chauffeur_trip_model.dart';
 
@@ -63,8 +64,10 @@ class ChauffeurService {
     return ChauffeurTripModel.fromJson(json);
   }
 
-  Future<List<Map<String, dynamic>>> _getAllReservationsRaw() async {
-    final response = await apiClient.dio.get('/api/v1/reservations');
+  // Scopé par trajet côté serveur (le chauffeur n'a accès qu'aux réservations des trajets qui lui
+  // sont affectés) plutôt que de charger toutes les réservations de la plateforme et filtrer ici.
+  Future<List<Map<String, dynamic>>> _getReservationsForTrip(String tripId) async {
+    final response = await apiClient.dio.get('/api/v1/reservations/trajet/$tripId/liste');
 
     if (response.data is! List) {
       return [];
@@ -74,14 +77,6 @@ class ChauffeurService {
         .where((e) => e is Map)
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
-  }
-
-  String _extractTripIdFromReservation(Map<String, dynamic> reservation) {
-    return reservation['trajetId']?.toString() ??
-        reservation['trajet']?['id']?.toString() ??
-        reservation['tripId']?.toString() ??
-        reservation['trip']?['id']?.toString() ??
-        '';
   }
 
   int _extractPassengerCountFromReservation(Map<String, dynamic> reservation) {
@@ -239,15 +234,10 @@ class ChauffeurService {
 
   Future<int> getPassengerCountForTrip(String tripId) async {
     try {
-      final reservations = await _getAllReservationsRaw();
-
-      final tripReservations = reservations.where((reservation) {
-        final reservationTripId = _extractTripIdFromReservation(reservation);
-        return reservationTripId == tripId;
-      }).toList();
+      final reservations = await _getReservationsForTrip(tripId);
 
       int total = 0;
-      for (final reservation in tripReservations) {
+      for (final reservation in reservations) {
         total += _extractPassengerCountFromReservation(reservation);
       }
 
@@ -270,17 +260,12 @@ class ChauffeurService {
     String tripId,
   ) async {
     try {
-      final reservations = await _getAllReservationsRaw();
+      final reservations = await _getReservationsForTrip(tripId);
       final presentBilletIds = await getPresentBilletIds(tripId);
-
-      final tripReservations = reservations.where((reservation) {
-        final reservationTripId = _extractTripIdFromReservation(reservation);
-        return reservationTripId == tripId;
-      }).toList();
 
       final List<ChauffeurPassengerModel> passengers = [];
 
-      for (final reservation in tripReservations) {
+      for (final reservation in reservations) {
         passengers.addAll(
           _extractPassengersFromReservation(
             reservation,
@@ -316,5 +301,30 @@ class ChauffeurService {
     }
 
     throw Exception('QR invalide ou billet introuvable.');
+  }
+
+  // Recherche en lecture seule (n'appelle pas /billets/valider, qui marque le billet comme
+  // utilisé) : sert uniquement à savoir pourquoi un QR scanné n'est pas dans la liste du trajet
+  // en cours (billet inconnu, ou billet d'un autre trajet passé/à venir).
+  Future<BilletLookupModel?> lookupBilletByQr(String qrCode) async {
+    try {
+      final response = await apiClient.dio.get(
+        '/api/v1/billets/rechercher',
+        queryParameters: {'qrCode': qrCode},
+      );
+
+      if (response.data is! Map) {
+        return null;
+      }
+
+      return BilletLookupModel.fromJson(
+        Map<String, dynamic>.from(response.data as Map),
+      );
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return null;
+      }
+      rethrow;
+    }
   }
 }

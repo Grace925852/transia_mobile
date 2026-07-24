@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/app/routes.dart';
 import 'package:transia_mobile/features/client/models/trajet_model.dart';
+import 'package:transia_mobile/shared/widgets/vehicule_thumbnail.dart';
 
 class TripListScreen extends StatelessWidget {
   final List<TrajetModel> trajets;
@@ -106,18 +107,9 @@ class TripListScreen extends StatelessWidget {
                           children: [
                             Row(
                               children: [
-                                Container(
-                                  height: 44,
-                                  width: 44,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF3158F5),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Icon(
-                                    Icons.directions_bus_filled_rounded,
-                                    color: Colors.white,
-                                    size: 24,
-                                  ),
+                                VehiculeThumbnail(
+                                  imageBase64: trajet.vehiculeImage,
+                                  size: 44,
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(

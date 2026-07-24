@@ -69,31 +69,7 @@ class _TrackingListScreenState extends State<TrackingListScreen> {
     });
 
     try {
-      final numericUserIdText =
-          await secureStorageService.getNumericUserId();
-
-      final fullName =
-          await secureStorageService.getFullName() ?? '';
-
-      final telephone =
-          await secureStorageService.getTelephone() ?? '';
-
-      final userId =
-          int.tryParse(numericUserIdText?.trim() ?? '') ?? 0;
-
-      debugPrint(
-        'TRACKING SESSION => '
-        'userId=$userId, '
-        'fullName=$fullName, '
-        'telephone=$telephone',
-      );
-
-      final myReservations =
-          await reservationService.getMyReservations(
-        userId: userId,
-        fullName: fullName,
-        username: telephone,
-      );
+      final myReservations = await reservationService.getMyReservations();
 
       final localPaidReservationIds =
           await paymentStatusService.getPaidReservationIds();

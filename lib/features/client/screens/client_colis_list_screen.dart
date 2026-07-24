@@ -31,8 +31,7 @@ class _ClientColisListScreenState extends State<ClientColisListScreen> {
   Future<void> _charger() async {
     setState(() { _loading = true; _error = ''; });
     try {
-      final userId = await _storage.getUserId() ?? '';
-      final list = await _service.getMesColis(userId);
+      final list = await _service.getMesColis();
       if (!mounted) return;
       setState(() { _colis = list; });
     } catch (e) {
@@ -46,11 +45,14 @@ class _ClientColisListScreenState extends State<ClientColisListScreen> {
   Color _statutColor(StatutColis s) {
     switch (s) {
       case StatutColis.livre:             return const Color(0xFF10B981);
-      case StatutColis.enCours:           return const Color(0xFF3158F5);
-      case StatutColis.collecteEffectuee: return const Color(0xFF8B5CF6);
-      case StatutColis.prisEnCharge:      return const Color(0xFF6366F1);
+      case StatutColis.enCoursLivraison:  return const Color(0xFF3158F5);
+      case StatutColis.enTransit:         return const Color(0xFF3158F5);
+      case StatutColis.arriveEnAgence:    return const Color(0xFF8B5CF6);
+      case StatutColis.deposeEnAgence:    return const Color(0xFF6366F1);
+      case StatutColis.retourne:
+      case StatutColis.perdu:
       case StatutColis.annule:            return const Color(0xFFEF4444);
-      default:                            return const Color(0xFFF59E0B);
+      case StatutColis.enAttenteDepot:    return const Color(0xFFF59E0B);
     }
   }
 
@@ -89,6 +91,16 @@ class _ClientColisListScreenState extends State<ClientColisListScreen> {
                       ],
                     ),
                   ),
+                  IconButton(
+                    onPressed: () => context.push(AppRoutes.clientDemandesCollecte),
+                    icon: const Icon(Icons.home_work_outlined),
+                    tooltip: 'Collectes à domicile',
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xFF3158F5).withValues(alpha: 0.1),
+                      foregroundColor: const Color(0xFF3158F5),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   ElevatedButton.icon(
                     onPressed: () async {
                       await context.push(AppRoutes.clientColisForm);
@@ -203,7 +215,7 @@ class _ColisCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        'Pour: ${colis.nomDestinataire}',
+                        'Pour: ${colis.destinataireNom}',
                         style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                       ),
                     ],
@@ -224,7 +236,7 @@ class _ColisCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (colis.villeDepartNom != null || colis.villeArriveeNom != null) ...[
+            if (colis.agenceDepartNom != null || colis.agenceArriveeNom != null) ...[
               const SizedBox(height: 10),
               const Divider(height: 1),
               const SizedBox(height: 10),
@@ -232,7 +244,7 @@ class _ColisCard extends StatelessWidget {
                 children: [
                   const Icon(Icons.circle, size: 8, color: Color(0xFF3158F5)),
                   const SizedBox(width: 6),
-                  Text(colis.villeDepartNom ?? '?',
+                  Text(colis.agenceDepartNom ?? '?',
                       style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 6),
@@ -240,10 +252,10 @@ class _ColisCard extends StatelessWidget {
                   ),
                   const Icon(Icons.location_on, size: 8, color: Color(0xFF10B981)),
                   const SizedBox(width: 6),
-                  Text(colis.villeArriveeNom ?? '?',
+                  Text(colis.agenceArriveeNom ?? '?',
                       style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
                   const Spacer(),
-                  Text('${colis.poids} kg',
+                  Text(trancheLabel(colis.tranchePoids),
                       style: const TextStyle(
                           fontSize: 12, fontWeight: FontWeight.w600,
                           color: Color(0xFF374151))),

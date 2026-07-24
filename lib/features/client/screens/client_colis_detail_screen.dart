@@ -35,20 +35,20 @@ class ClientColisDetailScreen extends StatelessWidget {
           _StatutCard(statut: colis.statut),
           const SizedBox(height: 12),
           // Trajet
-          if (colis.villeDepartNom != null || colis.villeArriveeNom != null)
+          if (colis.agenceDepartNom != null || colis.agenceArriveeNom != null)
             _InfoCard(
               title: 'Trajet',
               icon: Icons.route_rounded,
               children: [
                 _Row(
-                  label: 'Départ',
-                  value: colis.villeDepartNom ?? '—',
+                  label: 'Agence départ',
+                  value: colis.agenceDepartNom ?? '—',
                   icon: Icons.circle,
                   iconColor: const Color(0xFF3158F5),
                 ),
                 _Row(
-                  label: 'Arrivée',
-                  value: colis.villeArriveeNom ?? '—',
+                  label: 'Agence arrivée',
+                  value: colis.agenceArriveeNom ?? '—',
                   icon: Icons.location_on_rounded,
                   iconColor: const Color(0xFF10B981),
                 ),
@@ -60,9 +60,10 @@ class ClientColisDetailScreen extends StatelessWidget {
             title: 'Destinataire',
             icon: Icons.person_outline_rounded,
             children: [
-              _Row(label: 'Nom', value: colis.nomDestinataire),
-              _Row(label: 'Adresse', value: colis.adresseDestinataire),
-              _Row(label: 'Téléphone', value: colis.telephoneDestinataire),
+              _Row(label: 'Nom', value: colis.destinataireNom),
+              _Row(label: 'Téléphone', value: colis.destinataireTelephone),
+              if (colis.destinataireAdresse != null)
+                _Row(label: 'Adresse', value: colis.destinataireAdresse!),
             ],
           ),
           const SizedBox(height: 12),
@@ -71,19 +72,26 @@ class ClientColisDetailScreen extends StatelessWidget {
             title: 'Informations colis',
             icon: Icons.inventory_2_outlined,
             children: [
-              _Row(label: 'Poids', value: '${colis.poids} kg'),
-              if (colis.longueur > 0 || colis.largeur > 0 || colis.hauteur > 0)
-                _Row(
-                  label: 'Dimensions',
-                  value:
-                      '${colis.longueur}×${colis.largeur}×${colis.hauteur} cm',
-                ),
-              _Row(label: 'Mode de collecte', value: modeDepotLabel(colis.modeDepot)),
-              _Row(label: 'Mode de livraison', value: modeRemiseLabel(colis.modeRemise)),
-              if (colis.adresseCollecte != null)
-                _Row(label: 'Adresse de collecte', value: colis.adresseCollecte!),
-              if (colis.remarques != null && colis.remarques!.isNotEmpty)
-                _Row(label: 'Remarques', value: colis.remarques!),
+              _Row(label: 'Description', value: colis.description),
+              _Row(label: 'Tranche de poids', value: trancheLabel(colis.tranchePoids)),
+              if (colis.poidsReel != null)
+                _Row(label: 'Poids réel', value: '${colis.poidsReel} kg'),
+              if (colis.dimensions != null && colis.dimensions!.isNotEmpty)
+                _Row(label: 'Dimensions', value: colis.dimensions!),
+              _Row(label: 'Mode de remise', value: modeRemiseLabel(colis.modeRemise)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Tarification
+          _InfoCard(
+            title: 'Tarification',
+            icon: Icons.payments_outlined,
+            children: [
+              if (colis.prixEstime != null)
+                _Row(label: 'Prix estimé', value: '${colis.prixEstime!.toStringAsFixed(0)} FCFA'),
+              if (colis.prixFinal != null)
+                _Row(label: 'Prix final', value: '${colis.prixFinal!.toStringAsFixed(0)} FCFA'),
+              _Row(label: 'Paiement', value: statutPaiementLabel(colis.statutPaiement)),
             ],
           ),
           if (colis.dateCreation != null) ...[
@@ -93,6 +101,8 @@ class ClientColisDetailScreen extends StatelessWidget {
               icon: Icons.history_rounded,
               children: [
                 _Row(label: 'Date de création', value: colis.dateCreation!),
+                if (colis.dateLivraison != null)
+                  _Row(label: 'Date de livraison', value: colis.dateLivraison!),
               ],
             ),
           ],
@@ -108,12 +118,15 @@ class _StatutCard extends StatelessWidget {
 
   Color get _color {
     switch (statut) {
-      case StatutColis.livre:             return const Color(0xFF10B981);
-      case StatutColis.enCours:           return const Color(0xFF3158F5);
-      case StatutColis.collecteEffectuee: return const Color(0xFF8B5CF6);
-      case StatutColis.prisEnCharge:      return const Color(0xFF6366F1);
-      case StatutColis.annule:            return const Color(0xFFEF4444);
-      default:                            return const Color(0xFFF59E0B);
+      case StatutColis.livre:            return const Color(0xFF10B981);
+      case StatutColis.enCoursLivraison: return const Color(0xFF3158F5);
+      case StatutColis.enTransit:        return const Color(0xFF3158F5);
+      case StatutColis.arriveEnAgence:   return const Color(0xFF8B5CF6);
+      case StatutColis.deposeEnAgence:   return const Color(0xFF6366F1);
+      case StatutColis.retourne:
+      case StatutColis.perdu:
+      case StatutColis.annule:           return const Color(0xFFEF4444);
+      case StatutColis.enAttenteDepot:   return const Color(0xFFF59E0B);
     }
   }
 

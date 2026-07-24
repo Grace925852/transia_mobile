@@ -7,26 +7,23 @@ class ColisService {
 
   ColisService({required this.apiClient});
 
-  Future<List<ColisModel>> getMesColis(String expediteurId) async {
-    final response = await apiClient.dio.get(
-      ApiConstants.colis,
-      queryParameters: expediteurId.isNotEmpty ? {'expediteurId': expediteurId} : null,
-    );
+  Future<List<ColisModel>> getMesColis() async {
+    final response = await apiClient.dio.get('${ApiConstants.colis}/mes-colis');
 
     if (response.data is! List) return [];
 
     return (response.data as List)
         .whereType<Map<String, dynamic>>()
         .map(ColisModel.fromJson)
-        .toList()
-      ..sort((a, b) {
-        final da = DateTime.tryParse(a.dateCreation ?? '') ?? DateTime(1970);
-        final db = DateTime.tryParse(b.dateCreation ?? '') ?? DateTime(1970);
-        return db.compareTo(da);
-      });
+        .toList();
   }
 
-  Future<ColisModel> creerColis(ColisRequest request) async {
+  Future<ColisModel> getByNumeroSuivi(String numeroSuivi) async {
+    final response = await apiClient.dio.get('${ApiConstants.colis}/suivi/$numeroSuivi');
+    return ColisModel.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<ColisModel> enregistrerColis(ColisRequest request) async {
     final response = await apiClient.dio.post(
       ApiConstants.colis,
       data: request.toJson(),
@@ -34,10 +31,23 @@ class ColisService {
     return ColisModel.fromJson(response.data as Map<String, dynamic>);
   }
 
-  Future<void> annulerColis(String colisId) async {
-    await apiClient.dio.patch(
-      '${ApiConstants.colis}/$colisId/statut',
-      data: {'statut': 'ANNULE'},
+  Future<EstimationPrixModel> estimerPrix({
+    required String villeDepartId,
+    required String villeArriveeId,
+    required TranchePoids tranche,
+    required ModeRemise modeRemise,
+    bool collecteDomicile = false,
+  }) async {
+    final response = await apiClient.dio.get(
+      '${ApiConstants.tarifsColis}/estimer',
+      queryParameters: {
+        'departId': villeDepartId,
+        'arriveeId': villeArriveeId,
+        'tranche': trancheToJson(tranche),
+        'modeRemise': modeRemiseToJson(modeRemise),
+        'collecteDomicile': collecteDomicile,
+      },
     );
+    return EstimationPrixModel.fromJson(response.data as Map<String, dynamic>);
   }
 }

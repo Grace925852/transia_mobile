@@ -39,8 +39,7 @@ class _LivreurProfileScreenState extends State<LivreurProfileScreen> {
     try {
       final name = await _storage.getFullName();
       final phone = await _storage.getTelephone();
-      final id = await _storage.getNumericUserId() ?? '';
-      final list = await _service.getMesColis(id);
+      final list = await _service.getMesLivraisons();
       final profil = await _selfService.getMyProfil();
       if (!mounted) return;
       setState(() {
@@ -72,7 +71,7 @@ class _LivreurProfileScreenState extends State<LivreurProfileScreen> {
       _tous.where((c) => c.statut == StatutColis.livre).length;
 
   int get _enCours =>
-      _tous.where((c) => c.statut == StatutColis.enCours).length;
+      _tous.where((c) => c.statut == StatutColis.enCoursLivraison).length;
 
   @override
   Widget build(BuildContext context) {

@@ -56,19 +56,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
     });
 
     try {
-      final storedNumericUserIdString =
-          await secureStorageService.getNumericUserId();
-      final storedFullName = await secureStorageService.getFullName();
-      final storedUsername = await secureStorageService.getTelephone();
-
-      final storedNumericUserId =
-          int.tryParse(storedNumericUserIdString ?? '');
-
-      final result = await reservationService.getMyReservations(
-        userId: storedNumericUserId ?? -1,
-        fullName: storedFullName ?? '',
-        username: storedUsername ?? '',
-      );
+      final result = await reservationService.getMyReservations();
 
       final paidIds = await paymentStatusService.getPaidReservationIds();
 
@@ -128,8 +116,21 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       )
       .toList();
 
-  List<ReservationModel> get displayedReservations =>
-      selectedTab == 0 ? unpaidReservations : paidReservations;
+  // Pas de filtre "à venir" ici : on veut garder l'historique complet des annulations,
+  // passées ou futures, pour que le client retrouve ce qu'il a annulé.
+  List<ReservationModel> get cancelledReservations =>
+      reservations.where((r) => r.isCancelled).toList();
+
+  List<ReservationModel> get displayedReservations {
+    switch (selectedTab) {
+      case 1:
+        return paidReservations;
+      case 2:
+        return cancelledReservations;
+      default:
+        return unpaidReservations;
+    }
+  }
 
   Future<void> _cancelReservation(ReservationModel reservation) async {
     final status = reservation.statut.trim().toUpperCase();
@@ -196,58 +197,30 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
       await paymentStatusService.removePaidReservationId(reservation.id);
       await chargerReservations();
 
-      final cancelledReservation = reservations.cast<ReservationModel?>().firstWhere(
-            (r) => r?.id == reservation.id,
-            orElse: () => null,
-          );
-
-      final reallyCancelled =
-          cancelledReservation == null || cancelledReservation.isCancelled;
-
       if (!mounted) return;
 
-      if (reallyCancelled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              tr(
-                fr: 'Réservation annulée avec succès.',
-                en: 'Booking cancelled successfully.',
-                es: 'Reserva cancelada con éxito.',
-                ar: 'تم إلغاء الحجز بنجاح.',
-              ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            tr(
+              fr: 'Réservation annulée avec succès.',
+              en: 'Booking cancelled successfully.',
+              es: 'Reserva cancelada con éxito.',
+              ar: 'تم إلغاء الحجز بنجاح.',
             ),
           ),
-        );
-      }
-    } catch (_) {
-      await paymentStatusService.removePaidReservationId(reservation.id);
-      await chargerReservations();
-
-      final cancelledReservation = reservations.cast<ReservationModel?>().firstWhere(
-            (r) => r?.id == reservation.id,
-            orElse: () => null,
-          );
-
-      final reallyCancelled =
-          cancelledReservation == null || cancelledReservation.isCancelled;
-
+        ),
+      );
+    } catch (e) {
+      // Avant ce correctif, toute erreur ici était avalée silencieusement : l'utilisateur
+      // cliquait sur Annuler, confirmait, et ne voyait jamais si ça avait réellement échoué.
       if (!mounted) return;
-
-      if (reallyCancelled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              tr(
-                fr: 'Réservation annulée avec succès.',
-                en: 'Booking cancelled successfully.',
-                es: 'Reserva cancelada con éxito.',
-                ar: 'تم إلغاء الحجز بنجاح.',
-              ),
-            ),
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     }
   }
 
@@ -299,6 +272,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
               _ReservationTabs(
                 unpaidCount: unpaidReservations.length,
                 paidCount: paidReservations.length,
+                cancelledCount: cancelledReservations.length,
                 selectedTab: selectedTab,
                 unpaidLabel: tr(
                   fr: 'En attente',
@@ -311,6 +285,12 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                   en: 'Paid',
                   es: 'Pagadas',
                   ar: 'مدفوعة',
+                ),
+                cancelledLabel: tr(
+                  fr: 'Annulées',
+                  en: 'Cancelled',
+                  es: 'Canceladas',
+                  ar: 'ملغاة',
                 ),
                 onChanged: (index) {
                   setState(() {
@@ -343,7 +323,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                 )
               else if (displayedReservations.isEmpty)
                 _EmptyReservationCard(
-                  isPaidTab: selectedTab == 1,
+                  selectedTab: selectedTab,
                   emptyPendingLabel: tr(
                     fr: 'Aucune réservation en attente à venir',
                     en: 'No upcoming pending booking',
@@ -356,6 +336,12 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                     es: 'No hay reservas pagadas próximas',
                     ar: 'لا توجد حجوزات مدفوعة قادمة',
                   ),
+                  emptyCancelledLabel: tr(
+                    fr: 'Aucune réservation annulée',
+                    en: 'No cancelled booking',
+                    es: 'Ninguna reserva cancelada',
+                    ar: 'لا توجد حجوزات ملغاة',
+                  ),
                 )
               else
                 ...displayedReservations.map(
@@ -364,6 +350,7 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                     child: _ReservationCard(
                       reservation: reservation,
                       isPaid: _isPaid(reservation),
+                      isCancelled: reservation.isCancelled,
                       canCancel: _canCancelReservation(reservation),
                       canRefund: _isPaid(reservation) &&
                           reservation.isRefundEligible &&
@@ -440,6 +427,12 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
                         es: 'PAGADA',
                         ar: 'مدفوعة',
                       ),
+                      cancelledText: tr(
+                        fr: 'ANNULÉE',
+                        en: 'CANCELLED',
+                        es: 'CANCELADA',
+                        ar: 'ملغاة',
+                      ),
                       onPay: () async {
                         await context.push(
                           AppRoutes.payment,
@@ -470,17 +463,21 @@ class _ReservationsScreenState extends State<ReservationsScreen> {
 class _ReservationTabs extends StatelessWidget {
   final int unpaidCount;
   final int paidCount;
+  final int cancelledCount;
   final int selectedTab;
   final String unpaidLabel;
   final String paidLabel;
+  final String cancelledLabel;
   final ValueChanged<int> onChanged;
 
   const _ReservationTabs({
     required this.unpaidCount,
     required this.paidCount,
+    required this.cancelledCount,
     required this.selectedTab,
     required this.unpaidLabel,
     required this.paidLabel,
+    required this.cancelledLabel,
     required this.onChanged,
   });
 
@@ -505,6 +502,16 @@ class _ReservationTabs extends StatelessWidget {
             selected: selectedTab == 1,
             color: const Color(0xFF16A34A),
             onTap: () => onChanged(1),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _SmallTab(
+            title: cancelledLabel,
+            count: cancelledCount,
+            selected: selectedTab == 2,
+            color: const Color(0xFFEF4444),
+            onTap: () => onChanged(2),
           ),
         ),
       ],
@@ -590,6 +597,7 @@ class _SmallTab extends StatelessWidget {
 class _ReservationCard extends StatelessWidget {
   final ReservationModel reservation;
   final bool isPaid;
+  final bool isCancelled;
   final bool canCancel;
   final bool canRefund;
   final String payLabel;
@@ -604,6 +612,7 @@ class _ReservationCard extends StatelessWidget {
   final String statusLabel;
   final String waitingText;
   final String paidText;
+  final String cancelledText;
   final VoidCallback onPay;
   final VoidCallback onCancel;
   final VoidCallback onViewTicket;
@@ -612,6 +621,7 @@ class _ReservationCard extends StatelessWidget {
   const _ReservationCard({
     required this.reservation,
     required this.isPaid,
+    required this.isCancelled,
     required this.canCancel,
     required this.canRefund,
     required this.payLabel,
@@ -626,6 +636,7 @@ class _ReservationCard extends StatelessWidget {
     required this.statusLabel,
     required this.waitingText,
     required this.paidText,
+    required this.cancelledText,
     required this.onPay,
     required this.onCancel,
     required this.onViewTicket,
@@ -673,9 +684,10 @@ class _ReservationCard extends StatelessWidget {
           ),
           _ReservationRow(
             label: statusLabel,
-            value: isPaid ? paidText : waitingText,
-            valueColor:
-                isPaid ? const Color(0xFF16A34A) : const Color(0xFFF59E0B),
+            value: isCancelled ? cancelledText : (isPaid ? paidText : waitingText),
+            valueColor: isCancelled
+                ? const Color(0xFFEF4444)
+                : (isPaid ? const Color(0xFF16A34A) : const Color(0xFFF59E0B)),
           ),
           const Divider(height: 28),
           Row(
@@ -694,7 +706,9 @@ class _ReservationCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              if (isPaid)
+              if (isCancelled)
+                const SizedBox.shrink()
+              else if (isPaid)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -847,14 +861,16 @@ class _ReservationRow extends StatelessWidget {
 }
 
 class _EmptyReservationCard extends StatelessWidget {
-  final bool isPaidTab;
+  final int selectedTab;
   final String emptyPendingLabel;
   final String emptyPaidLabel;
+  final String emptyCancelledLabel;
 
   const _EmptyReservationCard({
-    required this.isPaidTab,
+    required this.selectedTab,
     required this.emptyPendingLabel,
     required this.emptyPaidLabel,
+    required this.emptyCancelledLabel,
   });
 
   @override
@@ -862,6 +878,17 @@ class _EmptyReservationCard extends StatelessWidget {
     final theme = Theme.of(context);
     final titleColor =
         theme.textTheme.titleLarge?.color ?? const Color(0xFF374151);
+
+    final icon = switch (selectedTab) {
+      1 => Icons.check_circle_outline_rounded,
+      2 => Icons.cancel_outlined,
+      _ => Icons.calendar_month_outlined,
+    };
+    final label = switch (selectedTab) {
+      1 => emptyPaidLabel,
+      2 => emptyCancelledLabel,
+      _ => emptyPendingLabel,
+    };
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -872,15 +899,13 @@ class _EmptyReservationCard extends StatelessWidget {
       child: Column(
         children: [
           Icon(
-            isPaidTab
-                ? Icons.check_circle_outline_rounded
-                : Icons.calendar_month_outlined,
+            icon,
             size: 52,
             color: theme.textTheme.bodyMedium?.color,
           ),
           const SizedBox(height: 12),
           Text(
-            isPaidTab ? emptyPaidLabel : emptyPendingLabel,
+            label,
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,

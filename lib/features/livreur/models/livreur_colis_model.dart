@@ -1,84 +1,62 @@
-import 'package:transia_mobile/features/client/models/colis_model.dart';
-
 export 'package:transia_mobile/features/client/models/colis_model.dart'
     show
+        TranchePoids,
         StatutColis,
-        ModeDepot,
+        StatutPaiementColis,
         ModeRemise,
         statutColisFromJson,
-        statutColisToJson,
         statutColisLabel,
-        modeDepotLabel,
-        modeRemiseLabel;
+        modeRemiseLabel,
+        trancheLabel;
+
+import 'package:transia_mobile/features/client/models/colis_model.dart';
 
 class LivreurColisModel {
   final String id;
   final String numeroSuivi;
-  final String nomDestinataire;
-  final String adresseDestinataire;
-  final String telephoneDestinataire;
-  final double poids;
+  final String description;
+  final TranchePoids tranchePoids;
   final StatutColis statut;
+  final StatutPaiementColis statutPaiement;
   final ModeRemise modeRemise;
-  final String? villeDepartNom;
-  final String? villeArriveeNom;
-  final String? remarques;
+  final String destinataireNom;
+  final String destinataireTelephone;
+  final String? destinataireAdresse;
+  final String? agenceDepartNom;
+  final String? agenceArriveeNom;
   final String? dateCreation;
-  final String? livreurId;
 
   const LivreurColisModel({
     required this.id,
     required this.numeroSuivi,
-    required this.nomDestinataire,
-    required this.adresseDestinataire,
-    required this.telephoneDestinataire,
-    required this.poids,
+    required this.description,
+    required this.tranchePoids,
     required this.statut,
+    required this.statutPaiement,
     required this.modeRemise,
-    this.villeDepartNom,
-    this.villeArriveeNom,
-    this.remarques,
+    required this.destinataireNom,
+    required this.destinataireTelephone,
+    this.destinataireAdresse,
+    this.agenceDepartNom,
+    this.agenceArriveeNom,
     this.dateCreation,
-    this.livreurId,
   });
 
   factory LivreurColisModel.fromJson(Map<String, dynamic> json) {
     return LivreurColisModel(
       id: json['id']?.toString() ?? '',
       numeroSuivi: json['numeroSuivi']?.toString() ?? '',
-      nomDestinataire: json['nomDestinataire']?.toString() ?? '',
-      adresseDestinataire: json['adresseDestinataire']?.toString() ?? '',
-      telephoneDestinataire: json['telephoneDestinataire']?.toString() ?? '',
-      poids: (json['poids'] as num?)?.toDouble() ?? 0,
+      description: json['description']?.toString() ?? '',
+      tranchePoids: trancheFromJson(json['tranchePoids']?.toString()),
       statut: statutColisFromJson(json['statut']?.toString()),
+      statutPaiement: statutPaiementFromJson(json['statutPaiement']?.toString()),
       modeRemise: modeRemiseFromJson(json['modeRemise']?.toString()),
-      villeDepartNom: json['villeDepartNom']?.toString(),
-      villeArriveeNom: json['villeArriveeNom']?.toString(),
-      remarques: json['remarques']?.toString(),
+      destinataireNom: json['destinataireNom']?.toString() ?? '',
+      destinataireTelephone: json['destinataireTelephone']?.toString() ?? '',
+      destinataireAdresse: json['destinataireAdresse']?.toString(),
+      agenceDepartNom: json['agenceDepartNom']?.toString(),
+      agenceArriveeNom: json['agenceArriveeNom']?.toString(),
       dateCreation: json['dateCreation']?.toString(),
-      livreurId: json['livreurId']?.toString(),
-    );
-  }
-
-  ColisModel toColisModel() {
-    return ColisModel(
-      id: id,
-      numeroSuivi: numeroSuivi,
-      nomDestinataire: nomDestinataire,
-      adresseDestinataire: adresseDestinataire,
-      telephoneDestinataire: telephoneDestinataire,
-      poids: poids,
-      longueur: 0,
-      largeur: 0,
-      hauteur: 0,
-      statut: statut,
-      modeDepot: ModeDepot.depotAgence,
-      modeRemise: modeRemise,
-      remarques: remarques,
-      dateCreation: dateCreation,
-      villeDepartNom: villeDepartNom,
-      villeArriveeNom: villeArriveeNom,
-      livreurId: livreurId,
     );
   }
 }
