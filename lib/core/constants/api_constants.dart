@@ -3,8 +3,8 @@ class ApiConstants {
   // vers la machine hôte) : sur un téléphone physique, 'localhost' désigne le téléphone
   // lui-même. Il faut l'IP locale (Wi-Fi) de la machine qui fait tourner le backend, et
   // le téléphone doit être sur le même réseau Wi-Fi. À remettre à jour si cette IP change.
-  static const String baseUrl = 'http://192.168.0.172:8181';
-  // static const String baseUrl = 'http://localhost:8181';
+  // static const String baseUrl = 'http://192.168.0.172:8181';
+  static const String baseUrl = 'http://localhost:8181';
 
   // baseUrl: '/api/v1',
 
@@ -24,5 +24,7 @@ class ApiConstants {
   static const String feedback = '/api/v1/feedback';
   static const String vehicules = '/api/v1/vehicule';
   static const String colis = '/api/v1/colis';
+  static const String tarifsColis = '/api/v1/colis/tarifs';
+  static const String demandesCollecte = '/api/v1/colis/collecte';
   static const String chauffeurProblemes = '/api/v1/chauffeur-problemes';
 }

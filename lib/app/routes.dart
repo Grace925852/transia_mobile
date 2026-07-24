@@ -23,12 +23,14 @@ import 'package:transia_mobile/features/client/screens/trip_list_screen.dart';
 import 'package:transia_mobile/features/client/screens/client_colis_list_screen.dart';
 import 'package:transia_mobile/features/client/screens/client_colis_form_screen.dart';
 import 'package:transia_mobile/features/client/screens/client_colis_detail_screen.dart';
+import 'package:transia_mobile/features/client/screens/client_demandes_collecte_screen.dart';
 import 'package:transia_mobile/features/client/models/colis_model.dart';
 import 'package:transia_mobile/features/client/screens/agences_screen.dart';
 import 'package:transia_mobile/features/client/screens/agence_detail_screen.dart';
 import 'package:transia_mobile/features/client/models/agence_model.dart';
 import 'package:transia_mobile/features/livreur/screens/livreur_main_screen.dart';
 import 'package:transia_mobile/features/livreur/screens/livreur_colis_detail_screen.dart';
+import 'package:transia_mobile/features/livreur/screens/livreur_demandes_collecte_screen.dart';
 import 'package:transia_mobile/features/livreur/models/livreur_colis_model.dart';
 
 class AppRoutes {
@@ -44,6 +46,7 @@ class AppRoutes {
 
   static const String livreur = '/livreur';
   static const String livreurColisDetail = '/livreur/colis-detail';
+  static const String livreurDemandesCollecte = '/livreur/demandes-collecte';
 
   static const String tripList = '/trip-list';
   static const String tripDetail = '/trip-detail';
@@ -61,6 +64,7 @@ class AppRoutes {
   static const String clientColis = '/client-colis';
   static const String clientColisForm = '/client-colis/nouveau';
   static const String clientColisDetail = '/client-colis/detail';
+  static const String clientDemandesCollecte = '/client-colis/demandes-collecte';
 
   static const String clientAgences = '/client-agences';
   static const String clientAgenceDetail = '/client-agences/detail';
@@ -117,6 +121,10 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => LivreurColisDetailScreen(
         colis: state.extra as LivreurColisModel,
       ),
+    ),
+    GoRoute(
+      path: AppRoutes.livreurDemandesCollecte,
+      builder: (context, state) => const LivreurDemandesCollecteScreen(),
     ),
     GoRoute(
       path: AppRoutes.tripList,
@@ -208,6 +216,10 @@ final GoRouter appRouter = GoRouter(
       builder: (context, state) => ClientColisDetailScreen(
         colis: state.extra as ColisModel,
       ),
+    ),
+    GoRoute(
+      path: AppRoutes.clientDemandesCollecte,
+      builder: (context, state) => const ClientDemandesCollecteScreen(),
     ),
     GoRoute(
       path: AppRoutes.clientAgences,

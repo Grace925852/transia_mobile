@@ -30,38 +30,25 @@ class _LivreurColisDetailScreenState extends State<LivreurColisDetailScreen> {
 
   Color get _couleurStatut {
     switch (_colis.statut) {
-      case StatutColis.livre:             return const Color(0xFF10B981);
-      case StatutColis.enCours:           return const Color(0xFF3158F5);
-      case StatutColis.collecteEffectuee: return const Color(0xFF8B5CF6);
-      case StatutColis.prisEnCharge:      return const Color(0xFF6366F1);
-      case StatutColis.annule:            return const Color(0xFFEF4444);
-      default:                            return const Color(0xFFF59E0B);
+      case StatutColis.livre:            return const Color(0xFF10B981);
+      case StatutColis.enCoursLivraison: return const Color(0xFF3158F5);
+      case StatutColis.enTransit:        return const Color(0xFF3158F5);
+      case StatutColis.arriveEnAgence:   return const Color(0xFF8B5CF6);
+      case StatutColis.deposeEnAgence:   return const Color(0xFF6366F1);
+      case StatutColis.retourne:
+      case StatutColis.perdu:
+      case StatutColis.annule:           return const Color(0xFFEF4444);
+      case StatutColis.enAttenteDepot:   return const Color(0xFFF59E0B);
     }
   }
 
-  Future<void> _changerStatut(StatutColis nouveauStatut) async {
+  Future<void> _confirmerLivraison() async {
     setState(() => _loading = true);
     try {
-      await _service.mettreAJourStatut(_colis.id, nouveauStatut);
+      final updated = await _service.confirmerLivraison(_colis.id);
       if (!mounted) return;
-      setState(() {
-        _colis = LivreurColisModel(
-          id: _colis.id,
-          numeroSuivi: _colis.numeroSuivi,
-          nomDestinataire: _colis.nomDestinataire,
-          adresseDestinataire: _colis.adresseDestinataire,
-          telephoneDestinataire: _colis.telephoneDestinataire,
-          poids: _colis.poids,
-          statut: nouveauStatut,
-          modeRemise: _colis.modeRemise,
-          villeDepartNom: _colis.villeDepartNom,
-          villeArriveeNom: _colis.villeArriveeNom,
-          remarques: _colis.remarques,
-          dateCreation: _colis.dateCreation,
-          livreurId: _colis.livreurId,
-        );
-      });
-      _snack('Statut mis à jour : ${statutColisLabel(nouveauStatut)}');
+      setState(() => _colis = updated);
+      _snack('Livraison confirmée !');
     } catch (e) {
       if (!mounted) return;
       _snack(e.toString().replaceAll('Exception: ', ''));
@@ -75,20 +62,8 @@ class _LivreurColisDetailScreenState extends State<LivreurColisDetailScreen> {
         .showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  List<(StatutColis, String, IconData)> get _actionsDisponibles {
-    switch (_colis.statut) {
-      case StatutColis.prisEnCharge:
-        return [(StatutColis.collecteEffectuee, 'Marquer collecté', Icons.check_circle_outline)];
-      case StatutColis.collecteEffectuee:
-        return [(StatutColis.enCours, 'Démarrer livraison', Icons.local_shipping_rounded)];
-      case StatutColis.enCours:
-        return [
-          (StatutColis.livre, 'Marquer livré', Icons.task_alt_rounded),
-        ];
-      default:
-        return [];
-    }
-  }
+  bool get _peutConfirmerLivraison =>
+      _colis.statut == StatutColis.enCoursLivraison;
 
   @override
   Widget build(BuildContext context) {
@@ -142,41 +117,36 @@ class _LivreurColisDetailScreenState extends State<LivreurColisDetailScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          // Actions
-          if (_actionsDisponibles.isNotEmpty)
+          // Action
+          if (_peutConfirmerLivraison)
             _Card(
-              title: 'Actions',
+              title: 'Action',
               icon: Icons.touch_app_rounded,
               isDark: isDark,
-              children: _actionsDisponibles.map((action) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      onPressed: _loading
-                          ? null
-                          : () => _changerStatut(action.$1),
-                      icon: _loading
-                          ? const SizedBox(
-                              width: 16, height: 16,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2))
-                          : Icon(action.$3, size: 18),
-                      label: Text(action.$2,
-                          style: const TextStyle(fontWeight: FontWeight.w700)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3158F5),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
-                      ),
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _loading ? null : _confirmerLivraison,
+                    icon: _loading
+                        ? const SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : const Icon(Icons.task_alt_rounded, size: 18),
+                    label: const Text('Marquer livré',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF3158F5),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
                     ),
                   ),
-                );
-              }).toList(),
+                ),
+              ],
             ),
           const SizedBox(height: 12),
           // Destinataire
@@ -185,38 +155,35 @@ class _LivreurColisDetailScreenState extends State<LivreurColisDetailScreen> {
             icon: Icons.person_outline_rounded,
             isDark: isDark,
             children: [
-              _InfoRow(label: 'Nom', value: _colis.nomDestinataire),
-              _InfoRow(label: 'Adresse', value: _colis.adresseDestinataire),
-              _InfoRow(label: 'Téléphone', value: _colis.telephoneDestinataire),
+              _InfoRow(label: 'Nom', value: _colis.destinataireNom),
+              _InfoRow(label: 'Téléphone', value: _colis.destinataireTelephone),
+              if (_colis.destinataireAdresse != null)
+                _InfoRow(label: 'Adresse', value: _colis.destinataireAdresse!),
               _InfoRow(label: 'Mode remise', value: modeRemiseLabel(_colis.modeRemise)),
             ],
           ),
           const SizedBox(height: 12),
           // Trajet
-          if (_colis.villeDepartNom != null)
+          if (_colis.agenceDepartNom != null)
             _Card(
               title: 'Trajet',
               icon: Icons.route_rounded,
               isDark: isDark,
               children: [
-                _InfoRow(label: 'Départ', value: _colis.villeDepartNom ?? '—'),
-                _InfoRow(label: 'Arrivée', value: _colis.villeArriveeNom ?? '—'),
-                _InfoRow(label: 'Poids', value: '${_colis.poids} kg'),
+                _InfoRow(label: 'Agence départ', value: _colis.agenceDepartNom ?? '—'),
+                _InfoRow(label: 'Agence arrivée', value: _colis.agenceArriveeNom ?? '—'),
+                _InfoRow(label: 'Tranche', value: trancheLabel(_colis.tranchePoids)),
               ],
             ),
-          if (_colis.remarques != null && _colis.remarques!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _Card(
-              title: 'Remarques',
-              icon: Icons.notes_rounded,
-              isDark: isDark,
-              children: [
-                Text(_colis.remarques!,
-                    style: const TextStyle(
-                        fontSize: 14, color: Color(0xFF6B7280))),
-              ],
-            ),
-          ],
+          const SizedBox(height: 12),
+          _Card(
+            title: 'Colis',
+            icon: Icons.notes_rounded,
+            isDark: isDark,
+            children: [
+              _InfoRow(label: 'Description', value: _colis.description),
+            ],
+          ),
         ],
       ),
     );

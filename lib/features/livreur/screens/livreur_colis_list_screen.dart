@@ -40,8 +40,7 @@ class _LivreurColisListScreenState extends State<LivreurColisListScreen>
   Future<void> _charger() async {
     setState(() { _loading = true; _error = ''; });
     try {
-      final id = await _storage.getUserId() ?? '';
-      final list = await _service.getMesColis(id);
+      final list = await _service.getMesLivraisons();
       if (!mounted) return;
       setState(() { _tous = list; });
     } catch (e) {
@@ -53,10 +52,16 @@ class _LivreurColisListScreenState extends State<LivreurColisListScreen>
   }
 
   List<LivreurColisModel> get _aLivrer => _tous.where((c) =>
-      c.statut != StatutColis.livre && c.statut != StatutColis.annule).toList();
+      c.statut != StatutColis.livre &&
+      c.statut != StatutColis.annule &&
+      c.statut != StatutColis.retourne &&
+      c.statut != StatutColis.perdu).toList();
 
   List<LivreurColisModel> get _historique => _tous.where((c) =>
-      c.statut == StatutColis.livre || c.statut == StatutColis.annule).toList();
+      c.statut == StatutColis.livre ||
+      c.statut == StatutColis.annule ||
+      c.statut == StatutColis.retourne ||
+      c.statut == StatutColis.perdu).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -70,17 +75,33 @@ class _LivreurColisListScreenState extends State<LivreurColisListScreen>
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
-              child: Column(
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Mes Colis',
-                      style: TextStyle(
-                          fontSize: 26, fontWeight: FontWeight.w800,
-                          color: theme.textTheme.bodyLarge?.color)),
-                  const SizedBox(height: 4),
-                  Text('${_tous.length} colis au total',
-                      style: const TextStyle(
-                          fontSize: 13, color: Color(0xFF6B7280))),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Mes Livraisons',
+                            style: TextStyle(
+                                fontSize: 26, fontWeight: FontWeight.w800,
+                                color: theme.textTheme.bodyLarge?.color)),
+                        const SizedBox(height: 4),
+                        Text('${_tous.length} colis au total',
+                            style: const TextStyle(
+                                fontSize: 13, color: Color(0xFF6B7280))),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => context.push(AppRoutes.livreurDemandesCollecte),
+                    icon: const Icon(Icons.home_work_outlined),
+                    tooltip: 'Collectes à effectuer',
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xFF3158F5).withValues(alpha: 0.1),
+                      foregroundColor: const Color(0xFF3158F5),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -121,8 +142,11 @@ class _LivreurColisListScreenState extends State<LivreurColisListScreen>
                               items: _aLivrer,
                               emptyMessage: 'Aucun colis à livrer',
                               onRefresh: _charger,
-                              onTap: (c) => context.push(
-                                  AppRoutes.livreurColisDetail, extra: c),
+                              onTap: (c) async {
+                                await context.push(
+                                    AppRoutes.livreurColisDetail, extra: c);
+                                _charger();
+                              },
                             ),
                             _ColisListView(
                               items: _historique,
@@ -156,12 +180,15 @@ class _ColisListView extends StatelessWidget {
 
   Color _color(StatutColis s) {
     switch (s) {
-      case StatutColis.livre:             return const Color(0xFF10B981);
-      case StatutColis.enCours:           return const Color(0xFF3158F5);
-      case StatutColis.collecteEffectuee: return const Color(0xFF8B5CF6);
-      case StatutColis.prisEnCharge:      return const Color(0xFF6366F1);
-      case StatutColis.annule:            return const Color(0xFFEF4444);
-      default:                            return const Color(0xFFF59E0B);
+      case StatutColis.livre:            return const Color(0xFF10B981);
+      case StatutColis.enCoursLivraison: return const Color(0xFF3158F5);
+      case StatutColis.enTransit:        return const Color(0xFF3158F5);
+      case StatutColis.arriveEnAgence:   return const Color(0xFF8B5CF6);
+      case StatutColis.deposeEnAgence:   return const Color(0xFF6366F1);
+      case StatutColis.retourne:
+      case StatutColis.perdu:
+      case StatutColis.annule:           return const Color(0xFFEF4444);
+      case StatutColis.enAttenteDepot:   return const Color(0xFFF59E0B);
     }
   }
 
@@ -233,22 +260,24 @@ class _ColisListView extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  Text('Pour : ${c.nomDestinataire}',
+                  Text('Pour : ${c.destinataireNom}',
                       style: const TextStyle(
                           fontSize: 13, fontWeight: FontWeight.w600,
                           color: Color(0xFF374151))),
-                  const SizedBox(height: 2),
-                  Text(c.adresseDestinataire,
-                      style: const TextStyle(
-                          fontSize: 12, color: Color(0xFF6B7280)),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  if (c.villeArriveeNom != null) ...[
+                  if (c.destinataireAdresse != null) ...[
+                    const SizedBox(height: 2),
+                    Text(c.destinataireAdresse!,
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF6B7280)),
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                  if (c.agenceArriveeNom != null) ...[
                     const SizedBox(height: 4),
                     Row(children: [
                       const Icon(Icons.location_on_rounded,
                           size: 12, color: Color(0xFF3158F5)),
                       const SizedBox(width: 4),
-                      Text(c.villeArriveeNom!,
+                      Text(c.agenceArriveeNom!,
                           style: const TextStyle(
                               fontSize: 12, color: Color(0xFF3158F5),
                               fontWeight: FontWeight.w600)),
@@ -256,7 +285,7 @@ class _ColisListView extends StatelessWidget {
                       const Icon(Icons.scale_rounded,
                           size: 12, color: Color(0xFF9CA3AF)),
                       const SizedBox(width: 4),
-                      Text('${c.poids} kg',
+                      Text(trancheLabel(c.tranchePoids),
                           style: const TextStyle(
                               fontSize: 12, color: Color(0xFF6B7280))),
                     ]),

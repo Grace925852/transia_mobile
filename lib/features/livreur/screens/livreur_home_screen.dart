@@ -37,8 +37,7 @@ class _LivreurHomeScreenState extends State<LivreurHomeScreen> {
     setState(() => _loading = true);
     try {
       final name = await _storage.getFullName();
-      final id = await _storage.getUserId() ?? '';
-      final list = await _service.getMesColis(id);
+      final list = await _service.getMesLivraisons();
       final profil = await _selfService.getMyProfil();
       if (!mounted) return;
       setState(() {
@@ -55,7 +54,7 @@ class _LivreurHomeScreenState extends State<LivreurHomeScreen> {
   int get _aLivrer => _tous.where((c) =>
       c.statut != StatutColis.livre && c.statut != StatutColis.annule).length;
 
-  int get _enCours => _tous.where((c) => c.statut == StatutColis.enCours).length;
+  int get _enCours => _tous.where((c) => c.statut == StatutColis.enCoursLivraison).length;
 
   int get _livresAujourdhui {
     final today = DateTime.now();
@@ -68,7 +67,7 @@ class _LivreurHomeScreenState extends State<LivreurHomeScreen> {
   }
 
   List<LivreurColisModel> get _urgents => _tous
-      .where((c) => c.statut == StatutColis.enCours || c.statut == StatutColis.collecteEffectuee)
+      .where((c) => c.statut == StatutColis.enCoursLivraison || c.statut == StatutColis.arriveEnAgence)
       .take(5)
       .toList();
 
@@ -264,10 +263,10 @@ class _MiniColisCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(colis.nomDestinataire,
+                  Text(colis.destinataireNom,
                       style: const TextStyle(
                           fontWeight: FontWeight.w700, fontSize: 14)),
-                  Text(colis.adresseDestinataire,
+                  Text(colis.destinataireAdresse ?? colis.destinataireTelephone,
                       style: const TextStyle(
                           fontSize: 12, color: Color(0xFF6B7280)),
                       maxLines: 1, overflow: TextOverflow.ellipsis),

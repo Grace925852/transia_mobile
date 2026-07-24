@@ -1,6 +1,7 @@
 class AgenceModel {
   final String id;
   final String nom;
+  final String villeId;
   final String villeNom;
   final String adresse;
   final String telephone;
@@ -13,6 +14,7 @@ class AgenceModel {
   AgenceModel({
     required this.id,
     required this.nom,
+    required this.villeId,
     required this.villeNom,
     required this.adresse,
     required this.telephone,
@@ -27,6 +29,7 @@ class AgenceModel {
     return AgenceModel(
       id: json['id']?.toString() ?? '',
       nom: json['nom']?.toString() ?? '',
+      villeId: json['villeId']?.toString() ?? '',
       villeNom: json['villeNom']?.toString() ?? '',
       adresse: json['adresse']?.toString() ?? '',
       telephone: json['telephone']?.toString() ?? '',

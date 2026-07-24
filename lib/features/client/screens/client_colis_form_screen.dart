@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
+import 'package:transia_mobile/features/client/models/agence_model.dart';
 import 'package:transia_mobile/features/client/models/colis_model.dart';
-import 'package:transia_mobile/features/client/models/ville_model.dart';
+import 'package:transia_mobile/features/client/services/agence_service.dart';
 import 'package:transia_mobile/features/client/services/colis_service.dart';
-import 'package:transia_mobile/features/client/services/ville_service.dart';
 
 class ClientColisFormScreen extends StatefulWidget {
   const ClientColisFormScreen({super.key});
@@ -17,101 +17,140 @@ class ClientColisFormScreen extends StatefulWidget {
 class _ClientColisFormScreenState extends State<ClientColisFormScreen> {
   final _storage = SecureStorageService();
   late final ColisService _colisService;
-  late final VilleService _villeService;
+  late final AgenceService _agenceService;
 
+  final _descriptionCtrl = TextEditingController();
+  final _dimensionsCtrl = TextEditingController();
   final _nomDestCtrl = TextEditingController();
-  final _adresseDestCtrl = TextEditingController();
   final _telDestCtrl = TextEditingController();
-  final _poidsCtrl = TextEditingController();
-  final _longueurCtrl = TextEditingController(text: '0');
-  final _largeurCtrl = TextEditingController(text: '0');
-  final _hauteurCtrl = TextEditingController(text: '0');
-  final _remarquesCtrl = TextEditingController();
-  final _adresseCollecteCtrl = TextEditingController();
+  final _adresseDestCtrl = TextEditingController();
 
-  ModeDepot _modeDepot = ModeDepot.depotAgence;
+  String _expediteurNom = '';
+  String _expediteurTelephone = '';
+
+  TranchePoids _tranchePoids = TranchePoids.moinsDe1kg;
   ModeRemise _modeRemise = ModeRemise.retraitAgence;
+  bool _collecteDomicile = false;
 
-  List<VilleModel> _villes = [];
-  String? _villeDepartId;
-  String? _villeArriveeId;
+  List<AgenceModel> _agences = [];
+  String? _agenceDepartId;
+  String? _agenceArriveeId;
 
   bool _loading = false;
-  bool _loadingVilles = true;
+  bool _loadingAgences = true;
+
+  EstimationPrixModel? _estimation;
+  String? _estimationError;
+  bool _estimating = false;
 
   @override
   void initState() {
     super.initState();
     _colisService = ColisService(apiClient: ApiClient(_storage));
-    _villeService = VilleService(apiClient: ApiClient(_storage));
-    _chargerVilles();
+    _agenceService = AgenceService(apiClient: ApiClient(_storage));
+    _init();
+  }
+
+  Future<void> _init() async {
+    _expediteurNom = await _storage.getFullName() ?? '';
+    _expediteurTelephone = await _storage.getTelephone() ?? '';
+
+    try {
+      final agences = await _agenceService.getAgencesActives();
+      if (!mounted) return;
+      setState(() { _agences = agences; _loadingAgences = false; });
+    } catch (_) {
+      if (mounted) setState(() { _loadingAgences = false; });
+    }
+
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _descriptionCtrl.dispose();
+    _dimensionsCtrl.dispose();
     _nomDestCtrl.dispose();
-    _adresseDestCtrl.dispose();
     _telDestCtrl.dispose();
-    _poidsCtrl.dispose();
-    _longueurCtrl.dispose();
-    _largeurCtrl.dispose();
-    _hauteurCtrl.dispose();
-    _remarquesCtrl.dispose();
-    _adresseCollecteCtrl.dispose();
+    _adresseDestCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _chargerVilles() async {
+  Future<void> _recalculerEstimation() async {
+    setState(() { _estimation = null; _estimationError = null; });
+
+    final depart = _agences.where((a) => a.id == _agenceDepartId).toList();
+    final arrivee = _agences.where((a) => a.id == _agenceArriveeId).toList();
+    if (depart.isEmpty || arrivee.isEmpty) return;
+
+    setState(() { _estimating = true; });
+
     try {
-      final villes = await _villeService.getVilles();
+      final estimation = await _colisService.estimerPrix(
+        villeDepartId: depart.first.villeId,
+        villeArriveeId: arrivee.first.villeId,
+        tranche: _tranchePoids,
+        modeRemise: _modeRemise,
+        collecteDomicile: _collecteDomicile,
+      );
       if (!mounted) return;
-      setState(() { _villes = villes; _loadingVilles = false; });
-    } catch (_) {
-      if (mounted) setState(() { _loadingVilles = false; });
+      setState(() { _estimation = estimation; _estimating = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _estimating = false;
+        _estimationError = 'Aucun tarif configuré pour ce trajet et cette tranche de poids.';
+      });
     }
   }
 
   Future<void> _soumettre() async {
-    if (_nomDestCtrl.text.trim().isEmpty ||
-        _adresseDestCtrl.text.trim().isEmpty ||
-        _telDestCtrl.text.trim().isEmpty ||
-        _poidsCtrl.text.trim().isEmpty) {
+    if (_descriptionCtrl.text.trim().isEmpty ||
+        _nomDestCtrl.text.trim().isEmpty ||
+        _telDestCtrl.text.trim().isEmpty) {
       _snack('Veuillez remplir tous les champs obligatoires.');
       return;
     }
 
-    if (_modeDepot == ModeDepot.enlevementDomicile &&
-        _adresseCollecteCtrl.text.trim().isEmpty) {
-      _snack("Veuillez saisir l'adresse d'enlèvement.");
+    if (_agenceDepartId == null || _agenceArriveeId == null) {
+      _snack('Veuillez sélectionner les agences de départ et d\'arrivée.');
+      return;
+    }
+
+    if (_agenceDepartId == _agenceArriveeId) {
+      _snack('L\'agence de départ et l\'agence d\'arrivée doivent être différentes.');
+      return;
+    }
+
+    if (_modeRemise == ModeRemise.livraisonDomicile &&
+        _adresseDestCtrl.text.trim().isEmpty) {
+      _snack('Veuillez saisir l\'adresse de livraison.');
       return;
     }
 
     setState(() { _loading = true; });
 
     try {
-      final expediteurId = await _storage.getUserId();
       final request = ColisRequest(
-        expediteurId: expediteurId,
-        nomDestinataire: _nomDestCtrl.text.trim(),
-        adresseDestinataire: _adresseDestCtrl.text.trim(),
-        telephoneDestinataire: _telDestCtrl.text.trim(),
-        poids: double.tryParse(_poidsCtrl.text.trim()) ?? 0,
-        longueur: double.tryParse(_longueurCtrl.text.trim()) ?? 0,
-        largeur: double.tryParse(_largeurCtrl.text.trim()) ?? 0,
-        hauteur: double.tryParse(_hauteurCtrl.text.trim()) ?? 0,
-        modeDepot: _modeDepot,
+        description: _descriptionCtrl.text.trim(),
+        tranchePoids: _tranchePoids,
+        dimensions: _dimensionsCtrl.text.trim().isNotEmpty
+            ? _dimensionsCtrl.text.trim()
+            : null,
         modeRemise: _modeRemise,
-        adresseCollecte: _modeDepot == ModeDepot.enlevementDomicile
-            ? _adresseCollecteCtrl.text.trim()
+        expediteurNom: _expediteurNom,
+        expediteurTelephone: _expediteurTelephone,
+        destinataireNom: _nomDestCtrl.text.trim(),
+        destinataireTelephone: _telDestCtrl.text.trim(),
+        destinataireAdresse: _modeRemise == ModeRemise.livraisonDomicile
+            ? _adresseDestCtrl.text.trim()
             : null,
-        remarques: _remarquesCtrl.text.trim().isNotEmpty
-            ? _remarquesCtrl.text.trim()
-            : null,
-        villeDepartId: _villeDepartId,
-        villeArriveeId: _villeArriveeId,
+        agenceDepartId: _agenceDepartId!,
+        agenceArriveeId: _agenceArriveeId!,
+        collecteDomicile: _collecteDomicile,
       );
 
-      await _colisService.creerColis(request);
+      await _colisService.enregistrerColis(request);
 
       if (!mounted) return;
       _snack('Colis enregistré avec succès !');
@@ -146,19 +185,64 @@ class _ClientColisFormScreenState extends State<ClientColisFormScreen> {
           onPressed: () => context.pop(),
         ),
       ),
-      body: _loadingVilles
+      body: _loadingAgences
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
               children: [
+                _Section(
+                  title: 'Trajet',
+                  icon: Icons.route_rounded,
+                  children: [
+                    _DropdownField(
+                      label: 'Agence de départ',
+                      value: _agenceDepartId,
+                      items: _agences
+                          .map((a) => DropdownMenuItem(
+                              value: a.id,
+                              child: Text('${a.nom} (${a.villeNom})')))
+                          .toList(),
+                      onChanged: (v) {
+                        setState(() {
+                          _agenceDepartId = v;
+                          if (_agenceArriveeId == v) _agenceArriveeId = null;
+                        });
+                        _recalculerEstimation();
+                      },
+                    ),
+                    _DropdownField(
+                      label: "Agence d'arrivée",
+                      value: _agenceArriveeId,
+                      // Les agences restent toutes dans la liste (juste désactivée si == départ)
+                      // : les retirer ferait planter DropdownButton si la valeur sélectionnée
+                      // n'existe plus dans les items (assertion Flutter "exactly one item").
+                      items: _agences
+                          .map((a) => DropdownMenuItem(
+                              value: a.id,
+                              enabled: a.id != _agenceDepartId,
+                              child: Text(
+                                a.id == _agenceDepartId
+                                    ? '${a.nom} (${a.villeNom}) — déjà choisie au départ'
+                                    : '${a.nom} (${a.villeNom})',
+                                style: a.id == _agenceDepartId
+                                    ? const TextStyle(color: Color(0xFF9CA3AF))
+                                    : null,
+                              )))
+                          .toList(),
+                      onChanged: (v) {
+                        setState(() => _agenceArriveeId = v);
+                        _recalculerEstimation();
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
                 _Section(
                   title: 'Destinataire',
                   icon: Icons.person_outline_rounded,
                   children: [
                     _Field(label: 'Nom complet *', controller: _nomDestCtrl,
                         hint: 'Ex : Koffi Akakpo'),
-                    _Field(label: 'Adresse *', controller: _adresseDestCtrl,
-                        hint: 'Adresse de livraison'),
                     _Field(label: 'Téléphone *', controller: _telDestCtrl,
                         hint: 'Ex : 90000000',
                         type: TextInputType.phone),
@@ -166,81 +250,31 @@ class _ClientColisFormScreenState extends State<ClientColisFormScreen> {
                 ),
                 const SizedBox(height: 12),
                 _Section(
-                  title: 'Trajet',
-                  icon: Icons.route_rounded,
-                  children: [
-                    _DropdownField(
-                      label: 'Ville de départ',
-                      value: _villeDepartId,
-                      items: _villes
-                          .map((v) => DropdownMenuItem(
-                              value: v.id,
-                              child: Text('${v.nomVille} (${v.region})')))
-                          .toList(),
-                      onChanged: (v) => setState(() => _villeDepartId = v),
-                    ),
-                    _DropdownField(
-                      label: "Ville d'arrivée",
-                      value: _villeArriveeId,
-                      items: _villes
-                          .where((v) => v.id != _villeDepartId)
-                          .map((v) => DropdownMenuItem(
-                              value: v.id,
-                              child: Text('${v.nomVille} (${v.region})')))
-                          .toList(),
-                      onChanged: (v) => setState(() => _villeArriveeId = v),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _Section(
-                  title: 'Dimensions & Poids',
+                  title: 'Colis',
                   icon: Icons.straighten_rounded,
                   children: [
-                    _Field(label: 'Poids (kg) *', controller: _poidsCtrl,
-                        hint: 'Ex : 2.5',
-                        type: TextInputType.numberWithOptions(decimal: true)),
-                    Row(
-                      children: [
-                        Expanded(child: _Field(label: 'Longueur (cm)',
-                            controller: _longueurCtrl, hint: '0',
-                            type: TextInputType.number)),
-                        const SizedBox(width: 8),
-                        Expanded(child: _Field(label: 'Largeur (cm)',
-                            controller: _largeurCtrl, hint: '0',
-                            type: TextInputType.number)),
-                        const SizedBox(width: 8),
-                        Expanded(child: _Field(label: 'Hauteur (cm)',
-                            controller: _hauteurCtrl, hint: '0',
-                            type: TextInputType.number)),
-                      ],
+                    _Field(label: 'Description *', controller: _descriptionCtrl,
+                        hint: 'Ex : Vêtements, documents...'),
+                    _Field(label: 'Dimensions (optionnel)',
+                        controller: _dimensionsCtrl,
+                        hint: 'Ex : 30x20x15 cm'),
+                    _DropdownField<TranchePoids>(
+                      label: 'Tranche de poids',
+                      value: _tranchePoids,
+                      items: TranchePoids.values
+                          .map((t) => DropdownMenuItem(
+                              value: t, child: Text(trancheLabel(t))))
+                          .toList(),
+                      onChanged: (v) {
+                        setState(() => _tranchePoids = v ?? _tranchePoids);
+                        _recalculerEstimation();
+                      },
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 _Section(
-                  title: 'Mode de collecte',
-                  icon: Icons.local_shipping_outlined,
-                  children: [
-                    _RadioGroup<ModeDepot>(
-                      value: _modeDepot,
-                      options: const [
-                        (ModeDepot.depotAgence, 'Dépôt en agence'),
-                        (ModeDepot.enlevementDomicile, 'Enlèvement à domicile'),
-                      ],
-                      onChanged: (v) => setState(() => _modeDepot = v),
-                    ),
-                    if (_modeDepot == ModeDepot.enlevementDomicile)
-                      _Field(
-                        label: "Adresse d'enlèvement *",
-                        controller: _adresseCollecteCtrl,
-                        hint: 'Adresse où le colis sera récupéré',
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _Section(
-                  title: 'Mode de livraison',
+                  title: 'Mode de remise',
                   icon: Icons.hail_rounded,
                   children: [
                     _RadioGroup<ModeRemise>(
@@ -249,22 +283,48 @@ class _ClientColisFormScreenState extends State<ClientColisFormScreen> {
                         (ModeRemise.retraitAgence, 'Retrait en agence'),
                         (ModeRemise.livraisonDomicile, 'Livraison à domicile'),
                       ],
-                      onChanged: (v) => setState(() => _modeRemise = v),
+                      onChanged: (v) {
+                        setState(() => _modeRemise = v);
+                        _recalculerEstimation();
+                      },
                     ),
+                    if (_modeRemise == ModeRemise.livraisonDomicile)
+                      _Field(
+                        label: 'Adresse de livraison *',
+                        controller: _adresseDestCtrl,
+                        hint: 'Quartier, rue...',
+                      ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 _Section(
-                  title: 'Remarques',
-                  icon: Icons.notes_rounded,
+                  title: 'Collecte',
+                  icon: Icons.home_work_outlined,
                   children: [
-                    _Field(label: 'Remarques (optionnel)',
-                        controller: _remarquesCtrl,
-                        hint: 'Ex : Fragile, ne pas retourner',
-                        maxLines: 3),
+                    _CheckboxRow(
+                      value: _collecteDomicile,
+                      label: 'Faire collecter ce colis à mon domicile',
+                      onChanged: (v) {
+                        setState(() => _collecteDomicile = v);
+                        _recalculerEstimation();
+                      },
+                    ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                if (_estimating)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                if (_estimation != null) _EstimationCard(estimation: _estimation!),
+                if (_estimationError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(_estimationError!,
+                        style: const TextStyle(color: Colors.red, fontSize: 13)),
+                  ),
+                const SizedBox(height: 8),
                 SizedBox(
                   height: 56,
                   child: ElevatedButton(
@@ -288,6 +348,57 @@ class _ClientColisFormScreenState extends State<ClientColisFormScreen> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+class _EstimationCard extends StatelessWidget {
+  final EstimationPrixModel estimation;
+  const _EstimationCard({required this.estimation});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFEFF6FF), Color(0xFFF0FDF4)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFDBEAFE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _row('Prix expédition', estimation.prixExpedition),
+          if (estimation.fraisCollecte > 0) _row('Frais de collecte', estimation.fraisCollecte),
+          if (estimation.fraisLivraison > 0) _row('Frais de livraison', estimation.fraisLivraison),
+          const Divider(height: 20),
+          _row('Total estimé', estimation.totalEstime, bold: true),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(String label, double value, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: TextStyle(
+                  fontSize: bold ? 15 : 13,
+                  fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+                  color: const Color(0xFF374151))),
+          Text('${value.toStringAsFixed(0)} FCFA',
+              style: TextStyle(
+                  fontSize: bold ? 15 : 13,
+                  fontWeight: bold ? FontWeight.w800 : FontWeight.w600,
+                  color: const Color(0xFF1E293B))),
+        ],
+      ),
     );
   }
 }
@@ -514,6 +625,41 @@ class _RadioGroup<T> extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+class _CheckboxRow extends StatelessWidget {
+  final bool value;
+  final String label;
+  final ValueChanged<bool> onChanged;
+
+  const _CheckboxRow({
+    required this.value,
+    required this.label,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = Theme.of(context).textTheme.bodyLarge?.color
+        ?? const Color(0xFF374151);
+
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: Row(
+        children: [
+          Checkbox(
+            value: value,
+            activeColor: const Color(0xFF3158F5),
+            onChanged: (v) => onChanged(v ?? false),
+          ),
+          Expanded(
+            child: Text(label,
+                style: TextStyle(fontSize: 14, color: textColor)),
+          ),
+        ],
+      ),
     );
   }
 }
