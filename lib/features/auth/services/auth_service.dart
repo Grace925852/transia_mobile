@@ -8,10 +8,7 @@ class AuthService {
   final ApiClient apiClient;
   final SecureStorageService secureStorageService;
 
-  AuthService({
-    required this.apiClient,
-    required this.secureStorageService,
-  });
+  AuthService({required this.apiClient, required this.secureStorageService});
 
   String _extractReadableError(dynamic data) {
     if (data == null) return '';
@@ -66,10 +63,7 @@ class AuthService {
     try {
       final response = await apiClient.dio.post(
         ApiConstants.login,
-        data: {
-          'telephone': telephone,
-          'password': password,
-        },
+        data: {'telephone': telephone, 'password': password},
       );
 
       final authResponse = AuthResponse.fromJson(response.data);
@@ -129,9 +123,11 @@ class AuthService {
         data: {'telephone': telephone.trim()},
       );
     } on DioException catch (e) {
-      throw Exception(_extractReadableError(e.response?.data).isNotEmpty
-          ? _extractReadableError(e.response?.data)
-          : 'Erreur lors de la demande de réinitialisation.');
+      throw Exception(
+        _extractReadableError(e.response?.data).isNotEmpty
+            ? _extractReadableError(e.response?.data)
+            : 'Erreur lors de la demande de réinitialisation.',
+      );
     } catch (e) {
       throw Exception(e.toString().replaceAll('Exception: ', ''));
     }

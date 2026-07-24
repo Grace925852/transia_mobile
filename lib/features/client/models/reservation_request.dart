@@ -1,5 +1,5 @@
 class ReservationRequestModel {
-  final String userId;
+  final int userId;
   final String trajetId;
   final int nombrePlace;
   final String nomResponsable;
