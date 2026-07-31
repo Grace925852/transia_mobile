@@ -34,9 +34,6 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
 
   String clientNom = '';
 
-  // L'identifiant utilisé par le backend est un nombre.
-  int? clientUserId;
-
   late final SecureStorageService secureStorageService;
   late final ApiClient apiClient;
   late final ReservationService reservationService;
@@ -93,46 +90,15 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     final storedName =
         (await secureStorageService.getFullName() ?? '').trim();
 
-    final storedNumericUserId =
-        await secureStorageService.getNumericUserId();
-
-    final int? numericUserId = int.tryParse(
-      (storedNumericUserId ?? '').trim(),
-    );
-
     debugPrint(
-      'BOOKING SESSION => '
-      'fullName=$storedName, '
-      'numericUserId=$numericUserId',
+      'BOOKING SESSION => fullName=$storedName',
     );
 
     if (!mounted) return;
 
     setState(() {
       clientNom = storedName;
-      clientUserId = numericUserId;
     });
-  }
-
-  Future<int?> _reloadClientUserId() async {
-    final storedNumericUserId =
-        await secureStorageService.getNumericUserId();
-
-    final int? numericUserId = int.tryParse(
-      (storedNumericUserId ?? '').trim(),
-    );
-
-    debugPrint(
-      'BOOKING RELOAD NUMERIC USER ID => $numericUserId',
-    );
-
-    if (mounted) {
-      setState(() {
-        clientUserId = numericUserId;
-      });
-    }
-
-    return numericUserId;
   }
 
   Future<String> _reloadClientNom() async {
@@ -223,27 +189,7 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
   }
 
   Future<void> _confirmerReservation() async {
-    final int? freshClientId =
-        await _reloadClientUserId();
-
     await _reloadClientNom();
-
-    if (freshClientId == null || freshClientId <= 0) {
-      _afficherMessage(
-        tr(
-          fr:
-              'Identifiant numérique du client introuvable. Déconnectez-vous puis reconnectez-vous.',
-          en:
-              'Numeric client ID not found. Please log out and log back in.',
-          es:
-              'No se encontró el identificador numérico del cliente. Cierre sesión y vuelva a iniciarla.',
-          ar:
-              'تعذر العثور على المعرف الرقمي للعميل. سجّل الخروج ثم ادخل من جديد.',
-        ),
-      );
-
-      return;
-    }
 
     if (!clientFaitPartieDuVoyage &&
         delegueController.text.trim().isEmpty) {
@@ -298,7 +244,6 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     }
 
     final request = ReservationRequestModel(
-      userId: freshClientId,
       trajetId: widget.trajet.id,
       nombrePlace: widget.nombreSieges,
       nomResponsable: _nomResponsable,

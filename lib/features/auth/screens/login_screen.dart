@@ -8,7 +8,14 @@ import 'package:transia_mobile/features/auth/models/auth_response.dart';
 import 'package:transia_mobile/features/auth/services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String expectedRole;
+  final bool allowRegistration;
+
+  const LoginScreen({
+    super.key,
+    required this.expectedRole,
+    this.allowRegistration = false,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -75,48 +82,68 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  bool _hasRole(AuthResponse r, String role) {
-    final upper = role.toUpperCase();
-    return r.roles.any((s) {
-      final u = s.toUpperCase();
-      return u == upper || u == 'ROLE_$upper';
-    });
-  }
+  String get _expectedRole => widget.expectedRole
+      .trim()
+      .toUpperCase()
+      .replaceFirst('ROLE_', '');
 
-  Future<void> _redirectByRole(AuthResponse user) async {
-    if (!mounted) return;
-    final isChauffeur = _hasRole(user, 'CHAUFFEUR');
-    final isLivreur = _hasRole(user, 'LIVREUR');
+  bool get _isClientPortal => _expectedRole == 'CLIENT';
 
-    if (isChauffeur && isLivreur) {
-      await _showRolePicker();
-    } else if (isChauffeur) {
-      context.go(AppRoutes.chauffeur);
-    } else if (isLivreur) {
-      context.go(AppRoutes.livreur);
-    } else {
-      context.go(AppRoutes.client);
+  String get _portalLabel {
+    switch (_expectedRole) {
+      case 'CHAUFFEUR':
+        return 'Espace Chauffeur';
+      case 'LIVREUR':
+        return 'Espace Livreur';
+      case 'CLIENT':
+      default:
+        return 'Espace Client';
     }
   }
 
-  Future<void> _showRolePicker() async {
+  bool _hasRole(AuthResponse response, String role) {
+    final expected = role
+        .trim()
+        .toUpperCase()
+        .replaceFirst('ROLE_', '');
+
+    return response.roles.any((item) {
+      final normalized = item
+          .trim()
+          .toUpperCase()
+          .replaceFirst('ROLE_', '');
+      return normalized == expected;
+    });
+  }
+
+  String _unauthorizedRoleMessage() {
+    switch (_expectedRole) {
+      case 'CHAUFFEUR':
+        return 'Ce compte n’est pas autorisé dans l’espace chauffeur.';
+      case 'LIVREUR':
+        return 'Ce compte n’est pas autorisé dans l’espace livreur.';
+      case 'CLIENT':
+      default:
+        return 'Ce compte n’est pas autorisé dans l’espace client.';
+    }
+  }
+
+  void _redirectToExpectedSpace() {
     if (!mounted) return;
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isDismissible: false,
-      enableDrag: false,
-      builder: (ctx) => _RolePickerSheet(
-        onChauffeur: () {
-          Navigator.of(ctx).pop();
-          context.go(AppRoutes.chauffeur);
-        },
-        onLivreur: () {
-          Navigator.of(ctx).pop();
-          context.go(AppRoutes.livreur);
-        },
-      ),
-    );
+
+    switch (_expectedRole) {
+      case 'CHAUFFEUR':
+        context.go(AppRoutes.chauffeur);
+        break;
+      case 'LIVREUR':
+        context.go(AppRoutes.livreur);
+        break;
+      case 'CLIENT':
+        context.go(AppRoutes.client);
+        break;
+      default:
+        throw Exception('Rôle attendu non pris en charge : $_expectedRole');
+    }
   }
 
   Future<void> login() async {
@@ -147,6 +174,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
+      if (!_hasRole(user, _expectedRole)) {
+        await authService.logout();
+        throw Exception(_unauthorizedRoleMessage());
+      }
+
       showMessage(
         tr(
           fr: 'Bienvenue ${user.fullName}',
@@ -155,7 +187,8 @@ class _LoginScreenState extends State<LoginScreen> {
           ar: 'مرحبًا ${user.fullName}',
         ),
       );
-      await _redirectByRole(user);
+
+      _redirectToExpectedSpace();
     } catch (e) {
       showMessage(e.toString().replaceAll('Exception: ', ''));
     } finally {
@@ -166,6 +199,11 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> register() async {
+    if (!widget.allowRegistration || !_isClientPortal) {
+      showMessage('L’inscription est réservée aux comptes clients.');
+      return;
+    }
+
     final fullName = registerFullNameController.text.trim();
     final telephone = registerPhoneController.text.trim();
     final email = registerEmailController.text.trim();
@@ -325,6 +363,28 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget buildModeSwitcher(BuildContext context) {
     final theme = Theme.of(context);
+
+    if (!widget.allowRegistration) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
+        decoration: BoxDecoration(
+          color: theme.brightness == Brightness.dark
+              ? const Color(0xFF172554)
+              : const Color(0xFFF1F5FF),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          _portalLabel,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: theme.textTheme.bodyLarge?.color,
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+          ),
+        ),
+      );
+    }
     final textColor =
         theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
     final isDark = theme.brightness == Brightness.dark;
@@ -785,12 +845,13 @@ Widget _buildLogo() {
                         color: cardColor,
                         borderRadius: BorderRadius.circular(28),
                       ),
-                      child: isLoginMode
+                      child: (!widget.allowRegistration || isLoginMode)
                           ? buildLoginForm(context)
                           : buildRegisterForm(context),
                     ),
-                    const SizedBox(height: 14),
-                    if (isLoginMode)
+                    if (widget.allowRegistration)
+                      const SizedBox(height: 14),
+                    if (widget.allowRegistration && isLoginMode)
                       TextButton(
                         onPressed: () {
                           setState(() {
@@ -809,7 +870,7 @@ Widget _buildLogo() {
                           ),
                         ),
                       )
-                    else
+                    else if (widget.allowRegistration)
                       TextButton(
                         onPressed: () {
                           setState(() {
@@ -839,149 +900,3 @@ Widget _buildLogo() {
   }
 }
 
-class _RolePickerSheet extends StatelessWidget {
-  final VoidCallback onChauffeur;
-  final VoidCallback onLivreur;
-
-  const _RolePickerSheet({
-    required this.onChauffeur,
-    required this.onLivreur,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final textColor = theme.textTheme.bodyLarge?.color ?? const Color(0xFF1E293B);
-    final subColor = theme.textTheme.bodyMedium?.color ?? const Color(0xFF64748B);
-
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: subColor.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Choisissez votre espace',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Votre compte a deux rôles actifs',
-            style: TextStyle(
-              fontSize: 13,
-              color: subColor,
-            ),
-          ),
-          const SizedBox(height: 24),
-          _SheetRoleButton(
-            icon: Icons.directions_bus_rounded,
-            label: 'Espace Chauffeur',
-            description: 'Gérez vos trajets et passagers',
-            color: const Color(0xFF7C3AED),
-            onTap: onChauffeur,
-          ),
-          const SizedBox(height: 12),
-          _SheetRoleButton(
-            icon: Icons.delivery_dining_rounded,
-            label: 'Espace Livreur',
-            description: 'Gérez vos tournées et livraisons',
-            color: const Color(0xFF059669),
-            onTap: onLivreur,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SheetRoleButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String description;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _SheetRoleButton({
-    required this.icon,
-    required this.label,
-    required this.description,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color.withValues(alpha: 0.25)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: color, size: 26),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: color,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      description,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: color.withValues(alpha: 0.7),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.arrow_forward_ios_rounded, color: color, size: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

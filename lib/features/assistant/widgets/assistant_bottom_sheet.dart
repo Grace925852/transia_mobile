@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:transia_mobile/core/network/api_client.dart';
+import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/assistant/models/assistant_message.dart';
 import 'package:transia_mobile/features/assistant/services/assistant_service.dart';
 import 'package:transia_mobile/features/assistant/widgets/assistant_header.dart';
@@ -32,7 +34,9 @@ class AssistantBottomSheet extends StatefulWidget {
 
 class _AssistantBottomSheetState
     extends State<AssistantBottomSheet> {
-  final AssistantService _assistantService = AssistantService();
+  late final SecureStorageService _storage;
+  late final ApiClient _apiClient;
+  late final AssistantService _assistantService;
 
   final TextEditingController _messageController =
       TextEditingController();
@@ -45,12 +49,11 @@ class _AssistantBottomSheetState
   final List<AssistantMessage> _messages = [];
 
   List<String> _suggestions = [
-    'Réserver un trajet',
+    'Quel est mon prochain trajet ?',
+    'Trajet Lomé vers Kara demain',
     'Voir mes réservations',
-    'Envoyer un colis',
-    'Paiement',
-    'Voir mon billet',
-    'Remboursement',
+    'Ai-je payé ?',
+    'Voir mes colis',
   ];
 
   bool _isTyping = false;
@@ -59,10 +62,18 @@ class _AssistantBottomSheetState
   void initState() {
     super.initState();
 
+    _storage = SecureStorageService();
+    _apiClient = ApiClient(_storage);
+
+    _assistantService = AssistantService(
+      apiClient: _apiClient,
+    );
+
     _messages.add(
       AssistantMessage.assistant(
         content:
-            'Bonjour 👋\nComment puis-je vous aider aujourd’hui ?',
+            'Bonjour 👋\nJe peux maintenant consulter les données de Transia pour vous répondre.',
+        suggestions: _suggestions,
       ),
     );
   }
@@ -88,7 +99,8 @@ class _AssistantBottomSheetState
     }
 
     final text =
-        (predefinedMessage ?? _messageController.text).trim();
+        (predefinedMessage ?? _messageController.text)
+            .trim();
 
     if (text.isEmpty) {
       return;
@@ -123,7 +135,11 @@ class _AssistantBottomSheetState
         _suggestions = response.suggestions;
         _isTyping = false;
       });
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint(
+        'ASSISTANT ERROR => $error\n$stackTrace',
+      );
+
       if (!mounted) {
         return;
       }
@@ -131,15 +147,16 @@ class _AssistantBottomSheetState
       setState(() {
         _messages.add(
           AssistantMessage.error(
-            content:
-                'Une erreur est survenue. Veuillez réessayer.',
+            content: error
+                .toString()
+                .replaceAll('Exception: ', ''),
           ),
         );
 
         _suggestions = [
-          'Réserver un trajet',
-          'Paiement',
-          'Remboursement',
+          'Quel est mon prochain trajet ?',
+          'Voir mes réservations',
+          'Voir mes colis',
         ];
 
         _isTyping = false;
@@ -173,7 +190,8 @@ class _AssistantBottomSheetState
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark =
+        theme.brightness == Brightness.dark;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -188,7 +206,8 @@ class _AssistantBottomSheetState
             color: isDark
                 ? const Color(0xFF151821)
                 : const Color(0xFFF9FAFC),
-            borderRadius: const BorderRadius.vertical(
+            borderRadius:
+                const BorderRadius.vertical(
               top: Radius.circular(30),
             ),
             boxShadow: [
@@ -211,22 +230,24 @@ class _AssistantBottomSheetState
                 height: 1,
                 thickness: 1,
                 color: isDark
-                    ? Colors.white.withValues(alpha: 0.07)
+                    ? Colors.white
+                        .withValues(alpha: 0.07)
                     : const Color(0xFFE8EBF1),
               ),
               Expanded(
                 child: ListView.builder(
                   controller: _scrollController,
                   keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
+                      ScrollViewKeyboardDismissBehavior
+                          .onDrag,
                   padding: const EdgeInsets.fromLTRB(
                     16,
                     20,
                     16,
                     18,
                   ),
-                  itemCount:
-                      _messages.length + (_isTyping ? 1 : 0),
+                  itemCount: _messages.length +
+                      (_isTyping ? 1 : 0),
                   itemBuilder: (context, index) {
                     if (_isTyping &&
                         index == _messages.length) {
@@ -264,12 +285,14 @@ class _TypingIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark =
-        Theme.of(context).brightness == Brightness.dark;
+        Theme.of(context).brightness ==
+            Brightness.dark;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
           Container(
             width: 33,
@@ -287,22 +310,27 @@ class _TypingIndicator extends StatelessWidget {
           const SizedBox(width: 9),
           Container(
             height: 43,
-            padding: const EdgeInsets.symmetric(
+            padding:
+                const EdgeInsets.symmetric(
               horizontal: 16,
             ),
             decoration: BoxDecoration(
               color: isDark
                   ? const Color(0xFF222632)
                   : Colors.white,
-              borderRadius: const BorderRadius.only(
+              borderRadius:
+                  const BorderRadius.only(
                 topLeft: Radius.circular(5),
                 topRight: Radius.circular(18),
                 bottomLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
+                bottomRight:
+                    Radius.circular(18),
               ),
               border: Border.all(
                 color: isDark
-                    ? Colors.white.withValues(alpha: 0.06)
+                    ? Colors.white.withValues(
+                        alpha: 0.06,
+                      )
                     : const Color(0xFFE9ECF2),
               ),
             ),
@@ -324,7 +352,8 @@ class _AnimatedDots extends StatefulWidget {
       _AnimatedDotsState();
 }
 
-class _AnimatedDotsState extends State<_AnimatedDots>
+class _AnimatedDotsState
+    extends State<_AnimatedDots>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
@@ -334,7 +363,8 @@ class _AnimatedDotsState extends State<_AnimatedDots>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration:
+          const Duration(milliseconds: 900),
     )..repeat();
   }
 
@@ -350,21 +380,31 @@ class _AnimatedDotsState extends State<_AnimatedDots>
       animation: _controller,
       builder: (context, _) {
         final activeIndex =
-            (_controller.value * 3).floor() % 3;
+            (_controller.value * 3).floor() %
+                3;
 
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: List.generate(3, (index) {
-            final isActive = index == activeIndex;
+            final isActive =
+                index == activeIndex;
 
             return AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              margin: const EdgeInsets.symmetric(horizontal: 3),
+              duration: const Duration(
+                milliseconds: 180,
+              ),
+              margin:
+                  const EdgeInsets.symmetric(
+                horizontal: 3,
+              ),
               width: isActive ? 8 : 6,
               height: isActive ? 8 : 6,
               decoration: BoxDecoration(
-                color: const Color(0xFF3158F5).withValues(
-                  alpha: isActive ? 1 : 0.35,
+                color:
+                    const Color(0xFF3158F5)
+                        .withValues(
+                  alpha:
+                      isActive ? 1 : 0.35,
                 ),
                 shape: BoxShape.circle,
               ),
