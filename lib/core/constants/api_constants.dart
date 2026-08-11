@@ -6,7 +6,7 @@ class ApiConstants {
    * adb reverse tcp:8181 tcp:8181
    */
   static const String baseUrl = 'http://127.0.0.1:8181';
-   //static const String baseUrl = 'http://10.0.2.2:8181';
+  //  static const String baseUrl = 'http://192.168.0.172:8181';
 
    //static const String baseUrl = 'http://192.168.1.103:8181';
 

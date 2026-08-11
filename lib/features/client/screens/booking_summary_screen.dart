@@ -87,14 +87,31 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
   }
 
   Future<void> _chargerSessionClient() async {
+    final token = await secureStorageService.getToken();
     final storedName =
         (await secureStorageService.getFullName() ?? '').trim();
 
     debugPrint(
-      'BOOKING SESSION => fullName=$storedName',
+      'BOOKING SESSION => fullName=$storedName, tokenExists=${token != null}',
     );
 
     if (!mounted) return;
+
+    if (token == null || token.trim().isEmpty) {
+      _afficherMessage(
+        tr(
+          fr: 'Utilisateur non connecté ou session expirée. Veuillez vous connecter.',
+          en: 'User not logged in or session expired. Please sign in.',
+          es: 'Usuario no conectado o sesión expirada. Por favor inicie sesión.',
+          ar: 'المستخدم غير مسجل الدخول أو انتهت الجلسة. يرجى تسجيل الدخول.',
+        ),
+      );
+      await secureStorageService.clearSession();
+      if (mounted) {
+        context.go(AppRoutes.login);
+      }
+      return;
+    }
 
     setState(() {
       clientNom = storedName;
@@ -189,6 +206,23 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
   }
 
   Future<void> _confirmerReservation() async {
+    final token = await secureStorageService.getToken();
+    if (token == null || token.trim().isEmpty) {
+      _afficherMessage(
+        tr(
+          fr: 'Utilisateur non connecté. Veuillez vous connecter pour réserver.',
+          en: 'User not logged in. Please sign in to book.',
+          es: 'Usuario no conectado. Inicie sesión para reservar.',
+          ar: 'المستخدم غير مسجل الدخول. يرجى تسجيل الدخول للحجز.',
+        ),
+      );
+      await secureStorageService.clearSession();
+      if (mounted) {
+        context.go(AppRoutes.login);
+      }
+      return;
+    }
+
     await _reloadClientNom();
 
     if (!clientFaitPartieDuVoyage &&
@@ -211,16 +245,19 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
       _afficherMessage(
         tr(
           fr:
-              'Nom du client introuvable. Reconnectez-vous puis réessayez.',
+              'Utilisateur non reconnu. Veuillez vous connecter à nouveau.',
           en:
-              'Client name not found. Please sign in again and retry.',
+              'Unrecognized user. Please sign in again.',
           es:
-              'Nombre del cliente no encontrado. Inicie sesión nuevamente e inténtelo otra vez.',
+              'Usuario no reconocido. Inicie sesión nuevamente.',
           ar:
-              'تعذر العثور على اسم العميل. سجّل الدخول مرة أخرى ثم أعد المحاولة.',
+              'مستخدم غير معروف. يرجى تسجيل الدخول مرة أخرى.',
         ),
       );
-
+      await secureStorageService.clearSession();
+      if (mounted) {
+        context.go(AppRoutes.login);
+      }
       return;
     }
 
@@ -288,12 +325,28 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      _afficherMessage(
-        e.toString().replaceAll(
-              'Exception: ',
-              '',
-            ),
-      );
+      final errorStr = e.toString().replaceAll(
+            'Exception: ',
+            '',
+          );
+
+      _afficherMessage(errorStr);
+
+      final lowerErr = errorStr.toLowerCase();
+      final isAuthError = lowerErr.contains('401') ||
+          lowerErr.contains('403') ||
+          lowerErr.contains('unauthorized') ||
+          lowerErr.contains('non authentifié') ||
+          lowerErr.contains('non reconnu') ||
+          lowerErr.contains('reconnectez') ||
+          lowerErr.contains('introuvable');
+
+      if (isAuthError) {
+        await secureStorageService.clearSession();
+        if (mounted) {
+          context.go(AppRoutes.login);
+        }
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -381,6 +434,30 @@ class _BookingSummaryScreenState extends State<BookingSummaryScreen> {
                   value:
                       '${widget.trajet.villeDepart} → ${widget.trajet.villeArrivee}',
                 ),
+                if (widget.trajet.agenceDepartNom != null && widget.trajet.agenceDepartNom!.isNotEmpty)
+                  _SummaryRow(
+                    label: tr(
+                      fr: 'Agence de départ',
+                      en: 'Departure agency',
+                      es: 'Agencia de salida',
+                      ar: 'وكالة الانطلاق',
+                    ),
+                    value: widget.trajet.agenceDepartAdresse != null && widget.trajet.agenceDepartAdresse!.isNotEmpty
+                        ? '${widget.trajet.agenceDepartNom}\n(${widget.trajet.agenceDepartAdresse})'
+                        : widget.trajet.agenceDepartNom!,
+                  ),
+                if (widget.trajet.agenceArriveeNom != null && widget.trajet.agenceArriveeNom!.isNotEmpty)
+                  _SummaryRow(
+                    label: tr(
+                      fr: 'Agence d\'arrivée',
+                      en: 'Arrival agency',
+                      es: 'Agencia de llegada',
+                      ar: 'وكالة الوصول',
+                    ),
+                    value: widget.trajet.agenceArriveeAdresse != null && widget.trajet.agenceArriveeAdresse!.isNotEmpty
+                        ? '${widget.trajet.agenceArriveeNom}\n(${widget.trajet.agenceArriveeAdresse})'
+                        : widget.trajet.agenceArriveeNom!,
+                  ),
                 _SummaryRow(
                   label: tr(
                     fr: 'Date',
@@ -794,31 +871,34 @@ class _SummaryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
-    final mutedColor =
-        theme.textTheme.bodyMedium?.color ??
-            const Color(0xFF6B7280);
-
-    final normalTextColor =
-        theme.textTheme.bodyLarge?.color ??
-            const Color(0xFF374151);
+    final labelColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    final valueColor = highlighted
+        ? const Color(0xFF3158F5)
+        : (isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B));
 
     return Padding(
       padding: const EdgeInsets.only(
-        bottom: 14,
+        bottom: 11,
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
+            flex: 2,
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 14,
-                color: mutedColor,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: labelColor,
               ),
             ),
           ),
+          const SizedBox(width: 10),
           Expanded(
+            flex: 3,
             child: Text(
               value,
               textAlign: TextAlign.right,
@@ -827,9 +907,7 @@ class _SummaryRow extends StatelessWidget {
                 fontWeight: highlighted
                     ? FontWeight.w700
                     : FontWeight.w600,
-                color: highlighted
-                    ? const Color(0xFF3158F5)
-                    : normalTextColor,
+                color: valueColor,
               ),
             ),
           ),

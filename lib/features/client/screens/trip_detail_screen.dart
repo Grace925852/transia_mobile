@@ -304,37 +304,76 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     );
   }
 
-  Widget _buildRow(BuildContext context, String label, String value, {bool highlight = false}) {
+  Widget _buildRow(
+    BuildContext context,
+    String label,
+    String value, {
+    String? subValue,
+    bool highlight = false,
+  }) {
     final theme = Theme.of(context);
-    final mutedColor =
-        theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
-    final normalTextColor =
-        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final labelColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    final valueColor = highlight
+        ? const Color(0xFF3158F5)
+        : (isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B));
+    final subValueColor = const Color(0xFF3158F5);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 11),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
+            flex: 2,
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 16,
-                color: mutedColor,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+                color: labelColor,
               ),
             ),
           ),
+          const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              value,
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: highlight
-                    ? const Color(0xFF3158F5)
-                    : normalTextColor,
-              ),
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  value,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: valueColor,
+                  ),
+                ),
+                if (subValue != null && subValue.trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF172554) : const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF1E40AF) : const Color(0xFFDBEAFE),
+                      ),
+                    ),
+                    child: Text(
+                      subValue,
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: subValueColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ],
@@ -405,7 +444,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               ar: 'اختيار المقعد',
             ),
             style: TextStyle(
-              fontSize: 22,
+              fontSize: 18,
               fontWeight: FontWeight.w700,
               color: titleColor,
             ),
@@ -630,22 +669,36 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     ar: 'ملخص الرحلة',
                   ),
                   style: TextStyle(
-                    fontSize: 22,
+                    fontSize: 18,
                     fontWeight: FontWeight.w700,
                     color: titleColor,
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 16),
                 _buildRow(
                   context,
                   tr(fr: 'Départ', en: 'Departure', es: 'Salida', ar: 'الانطلاق'),
                   trajet.villeDepart,
+                  subValue: trajet.agenceDepartNom,
                 ),
+                if (trajet.agenceDepartAdresse != null && trajet.agenceDepartAdresse!.isNotEmpty)
+                  _buildRow(
+                    context,
+                    tr(fr: 'Adresse de départ', en: 'Departure address', es: 'Dirección de salida', ar: 'عنوان الانطلاق'),
+                    trajet.agenceDepartAdresse!,
+                  ),
                 _buildRow(
                   context,
                   tr(fr: 'Destination', en: 'Destination', es: 'Destino', ar: 'الوجهة'),
                   trajet.villeArrivee,
+                  subValue: trajet.agenceArriveeNom,
                 ),
+                if (trajet.agenceArriveeAdresse != null && trajet.agenceArriveeAdresse!.isNotEmpty)
+                  _buildRow(
+                    context,
+                    tr(fr: 'Adresse d\'arrivée', en: 'Arrival address', es: 'Dirección de llegada', ar: 'عنوان الوصول'),
+                    trajet.agenceArriveeAdresse!,
+                  ),
                 _buildRow(
                   context,
                   tr(fr: 'Date', en: 'Date', es: 'Fecha', ar: 'التاريخ'),
@@ -697,7 +750,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     ar: 'التسعير',
                   ),
                   style: TextStyle(
-                    fontSize: 22,
+                    fontSize: 18,
                     fontWeight: FontWeight.w700,
                     color: titleColor,
                   ),
