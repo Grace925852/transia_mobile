@@ -73,10 +73,9 @@ class ApiClient {
           }
 
           final statusCode = error.response?.statusCode;
-          if ((statusCode == 401 || statusCode == 403) &&
-              !_isPublicEndpoint(error.requestOptions.path)) {
-            debugPrint(
-              'ApiClient: 401/403 décelé sur endpoint protégé, déconnexion et redirection...',
+          if (statusCode == 401 && !_isPublicEndpoint(error.requestOptions.path)) {
+            debugPrint( 
+              'ApiClient: 401 décelé (session expirée/invalide), déconnexion et redirection...',
             );
             final roles = await _secureStorageService.getRoles();
             await _secureStorageService.clearSession();

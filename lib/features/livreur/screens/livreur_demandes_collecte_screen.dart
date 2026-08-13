@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/client/models/demande_collecte_model.dart';
@@ -148,6 +149,20 @@ class _LivreurDemandesCollecteScreenState
                                   Text('Agence : ${d.agenceNom}',
                                       style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
                                 ],
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => _ouvrirGoogleMaps(d.adresseCollecte),
+                                    icon: const Icon(Icons.map_rounded, color: Color(0xFF3158F5), size: 16),
+                                    label: const Text('Voir sur Google Maps', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF3158F5))),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      side: const BorderSide(color: Color(0xFF3158F5)),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
                           );
@@ -155,5 +170,13 @@ class _LivreurDemandesCollecteScreenState
                       ),
                     ),
     );
+  }
+
+  Future<void> _ouvrirGoogleMaps(String adresse) async {
+    final query = Uri.encodeComponent(adresse);
+    final url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
   }
 }
