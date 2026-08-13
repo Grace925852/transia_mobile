@@ -219,6 +219,9 @@ class ColisRequest {
   final String agenceDepartId;
   final String agenceArriveeId;
   final bool collecteDomicile;
+  final String? adresseCollecte;
+  final double? latitudeCollecte;
+  final double? longitudeCollecte;
 
   const ColisRequest({
     required this.description,
@@ -233,6 +236,9 @@ class ColisRequest {
     required this.agenceDepartId,
     required this.agenceArriveeId,
     this.collecteDomicile = false,
+    this.adresseCollecte,
+    this.latitudeCollecte,
+    this.longitudeCollecte,
   });
 
   Map<String, dynamic> toJson() {
@@ -249,6 +255,9 @@ class ColisRequest {
       'agenceDepartId': agenceDepartId,
       'agenceArriveeId': agenceArriveeId,
       'collecteDomicile': collecteDomicile,
+      if (adresseCollecte != null) 'adresseCollecte': adresseCollecte,
+      if (latitudeCollecte != null) 'latitudeCollecte': latitudeCollecte,
+      if (longitudeCollecte != null) 'longitudeCollecte': longitudeCollecte,
     };
   }
 }

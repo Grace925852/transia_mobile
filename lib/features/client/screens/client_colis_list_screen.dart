@@ -91,16 +91,6 @@ class _ClientColisListScreenState extends State<ClientColisListScreen> {
                       ],
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => context.push(AppRoutes.clientDemandesCollecte),
-                    icon: const Icon(Icons.home_work_outlined),
-                    tooltip: 'Collectes à domicile',
-                    style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xFF3158F5).withValues(alpha: 0.1),
-                      foregroundColor: const Color(0xFF3158F5),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
                   ElevatedButton.icon(
                     onPressed: () async {
                       await context.push(AppRoutes.clientColisForm);
