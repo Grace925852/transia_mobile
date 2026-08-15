@@ -39,6 +39,7 @@ class _LivreurColisDetailScreenState extends State<LivreurColisDetailScreen> {
       case StatutColis.retourne:
       case StatutColis.perdu:
       case StatutColis.annule:           return const Color(0xFFEF4444);
+      case StatutColis.enAttenteCollecte:
       case StatutColis.enAttenteDepot:   return const Color(0xFFF59E0B);
     }
   }

@@ -3,14 +3,30 @@ import 'package:transia_mobile/core/network/api_client.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/client/models/demande_collecte_model.dart';
 import 'package:transia_mobile/features/livreur/models/livreur_colis_model.dart';
+import 'package:transia_mobile/features/livreur/models/livreur_tournee_model.dart';
 
 class LivreurService {
   final ApiClient apiClient;
 
   LivreurService({required this.apiClient});
 
-  // Lecture seule : le rattachement d'un colis à une demande (statut COLLECTE) se fait
-  // aujourd'hui côté agence, une fois le colis physiquement ramené et pesé par un agent.
+  Future<List<LivreurTourneeModel>> getMesTournees() async {
+    final storage = SecureStorageService();
+    final livreurId = await storage.getUserId() ?? '';
+    if (livreurId.isEmpty) return [];
+
+    final response = await apiClient.dio.get(
+      '${ApiConstants.tournees}?livreurId=$livreurId',
+    );
+
+    if (response.data is! List) return [];
+
+    return (response.data as List)
+        .whereType<Map<String, dynamic>>()
+        .map(LivreurTourneeModel.fromJson)
+        .toList();
+  }
+
   Future<List<DemandeCollecteModel>> getMesDemandesCollecte() async {
     final storage = SecureStorageService();
     final livreurId = await storage.getUserId() ?? '';

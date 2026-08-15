@@ -94,6 +94,17 @@ class ClientColisDetailScreen extends StatelessWidget {
               _Row(label: 'Paiement', value: statutPaiementLabel(colis.statutPaiement)),
             ],
           ),
+          if (colis.livreurNom != null && colis.livreurNom!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _InfoCard(
+              title: 'Prise en charge par le livreur',
+              icon: Icons.two_wheeler_rounded,
+              children: [
+                _Row(label: 'Livreur assigné', value: colis.livreurNom!),
+                const _Row(label: 'Mission', value: 'Enlèvement à votre adresse en cours'),
+              ],
+            ),
+          ],
           if (colis.dateCreation != null) ...[
             const SizedBox(height: 12),
             _InfoCard(
@@ -126,6 +137,7 @@ class _StatutCard extends StatelessWidget {
       case StatutColis.retourne:
       case StatutColis.perdu:
       case StatutColis.annule:           return const Color(0xFFEF4444);
+      case StatutColis.enAttenteCollecte:
       case StatutColis.enAttenteDepot:   return const Color(0xFFF59E0B);
     }
   }
