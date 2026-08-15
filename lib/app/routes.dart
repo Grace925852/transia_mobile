@@ -37,34 +37,38 @@ import 'package:transia_mobile/features/livreur/screens/livreur_demandes_collect
 import 'package:transia_mobile/features/livreur/screens/livreur_main_screen.dart';
 
 import 'package:transia_mobile/shared/screens/edit_profile_screen.dart';
-
-enum AppLaunchMode {
-  client,
-  chauffeur,
-  livreur,
-}
-
-/// Choisis ici l'interface lancée au démarrage.
-const AppLaunchMode appLaunchMode = AppLaunchMode.client;
+import 'package:transia_mobile/shared/screens/welcome_screen.dart';
+import 'package:transia_mobile/shared/screens/professional_space_screen.dart';
 
 class AppRoutes {
-  static const String login = '/';
+  // Entrée principale
+  static const String welcome = '/';
+
+  // Authentification
+  static const String login = '/login';
+  static const String professionalSpace = '/pro';
   static const String chauffeurLogin = '/chauffeur-login';
   static const String livreurLogin = '/livreur-login';
   static const String forgotPassword = '/forgot-password';
   static const String editProfile = '/edit-profile';
 
+  // Client
   static const String client = '/client';
 
+  // Chauffeur
   static const String chauffeur = '/chauffeur';
   static const String chauffeurPassengers = '/chauffeur/passagers';
   static const String chauffeurScan = '/chauffeur/scan';
-  static const String chauffeurReportProblem = '/chauffeur/report-problem';
+  static const String chauffeurReportProblem =
+      '/chauffeur/report-problem';
 
+  // Livreur
   static const String livreur = '/livreur';
   static const String livreurColisDetail = '/livreur/colis-detail';
-  static const String livreurDemandesCollecte = '/livreur/demandes-collecte';
+  static const String livreurDemandesCollecte =
+      '/livreur/demandes-collecte';
 
+  // Trajets / Réservations
   static const String tripList = '/trip-list';
   static const String tripDetail = '/trip-detail';
   static const String bookingSummary = '/booking-summary';
@@ -78,30 +82,39 @@ class AppRoutes {
   static const String trackingDetail = '/tracking-detail';
   static const String rating = '/rating';
 
+  // Colis client
   static const String clientColis = '/client-colis';
   static const String clientColisForm = '/client-colis/nouveau';
   static const String clientColisDetail = '/client-colis/detail';
   static const String clientDemandesCollecte =
       '/client-colis/demandes-collecte';
 
+  // Agences
   static const String clientAgences = '/client-agences';
   static const String clientAgenceDetail = '/client-agences/detail';
 }
 
-String get initialAppLocation {
-  switch (appLaunchMode) {
-    case AppLaunchMode.client:
-      return AppRoutes.login;
-    case AppLaunchMode.chauffeur:
-      return AppRoutes.chauffeurLogin;
-    case AppLaunchMode.livreur:
-      return AppRoutes.livreurLogin;
-  }
-}
-
 final GoRouter appRouter = GoRouter(
-  initialLocation: initialAppLocation,
+  initialLocation: AppRoutes.welcome,
   routes: [
+    // =========================================================
+    // ÉCRAN D'ENTRÉE
+    // =========================================================
+
+    GoRoute(
+      path: AppRoutes.welcome,
+      builder: (context, state) => const WelcomeScreen(),
+    ),
+
+    GoRoute(
+      path: AppRoutes.professionalSpace,
+      builder: (context, state) => const ProfessionalSpaceScreen(),
+    ),
+
+    // =========================================================
+    // AUTHENTIFICATION
+    // =========================================================
+
     GoRoute(
       path: AppRoutes.login,
       builder: (context, state) => const LoginScreen(
@@ -109,44 +122,61 @@ final GoRouter appRouter = GoRouter(
         allowRegistration: true,
       ),
     ),
+
     GoRoute(
       path: AppRoutes.chauffeurLogin,
       builder: (context, state) => const LoginScreen(
         expectedRole: 'CHAUFFEUR',
       ),
     ),
+
     GoRoute(
       path: AppRoutes.livreurLogin,
       builder: (context, state) => const LoginScreen(
         expectedRole: 'LIVREUR',
       ),
     ),
+
     GoRoute(
       path: AppRoutes.forgotPassword,
       builder: (context, state) => const ForgotPasswordScreen(),
     ),
+
     GoRoute(
       path: AppRoutes.editProfile,
       builder: (context, state) => const EditProfileScreen(),
     ),
+
+    // =========================================================
+    // CLIENT
+    // =========================================================
+
     GoRoute(
       path: AppRoutes.client,
       builder: (context, state) => const ClientMainScreen(),
     ),
+
+    // =========================================================
+    // CHAUFFEUR
+    // =========================================================
+
     GoRoute(
       path: AppRoutes.chauffeur,
       builder: (context, state) => const ChauffeurMainScreen(),
     ),
+
     GoRoute(
       path: AppRoutes.chauffeurPassengers,
       builder: (context, state) => ChauffeurTripPassengersScreen(
         trip: state.extra as ChauffeurTripModel,
       ),
     ),
+
     GoRoute(
       path: AppRoutes.chauffeurScan,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>;
+
         return ChauffeurScanScreen(
           trip: data['trip'] as ChauffeurTripModel,
           passengers:
@@ -154,30 +184,45 @@ final GoRouter appRouter = GoRouter(
         );
       },
     ),
+
     GoRoute(
       path: AppRoutes.chauffeurReportProblem,
       builder: (context, state) => ChauffeurReportProblemScreen(
         trip: state.extra as ChauffeurTripModel,
       ),
     ),
+
+    // =========================================================
+    // LIVREUR
+    // =========================================================
+
     GoRoute(
       path: AppRoutes.livreur,
       builder: (context, state) => const LivreurMainScreen(),
     ),
+
     GoRoute(
       path: AppRoutes.livreurColisDetail,
       builder: (context, state) => LivreurColisDetailScreen(
         colis: state.extra as LivreurColisModel,
       ),
     ),
+
     GoRoute(
       path: AppRoutes.livreurDemandesCollecte,
-      builder: (context, state) => const LivreurDemandesCollecteScreen(),
+      builder: (context, state) =>
+          const LivreurDemandesCollecteScreen(),
     ),
+
+    // =========================================================
+    // TRAJETS
+    // =========================================================
+
     GoRoute(
       path: AppRoutes.tripList,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>;
+
         return TripListScreen(
           trajets: data['trajets'],
           villeDepart: data['villeDepart'],
@@ -187,86 +232,120 @@ final GoRouter appRouter = GoRouter(
         );
       },
     ),
+
     GoRoute(
       path: AppRoutes.tripDetail,
       builder: (context, state) => TripDetailScreen(
         trajet: state.extra as TrajetModel,
       ),
     ),
+
     GoRoute(
       path: AppRoutes.bookingSummary,
       builder: (context, state) {
         final data = state.extra as Map<String, dynamic>;
+
         return BookingSummaryScreen(
           trajet: data['trajet'] as TrajetModel,
           nombreSieges: data['nombreSieges'] as int,
-          selectedSeats: (data['selectedSeats'] as List<dynamic>? ?? [])
-              .map((element) => int.tryParse(element.toString()) ?? 0)
-              .where((element) => element > 0)
-              .toList(),
+          selectedSeats:
+              (data['selectedSeats'] as List<dynamic>? ?? [])
+                  .map(
+                    (element) =>
+                        int.tryParse(element.toString()) ?? 0,
+                  )
+                  .where((element) => element > 0)
+                  .toList(),
         );
       },
     ),
+
+    // =========================================================
+    // RÉSERVATIONS / PAIEMENT
+    // =========================================================
+
     GoRoute(
       path: AppRoutes.reservations,
-      builder: (context, state) => const ClientMainScreen(initialIndex: 1),
+      builder: (context, state) =>
+          const ClientMainScreen(initialIndex: 1),
     ),
+
     GoRoute(
       path: AppRoutes.payment,
       builder: (context, state) => PaymentScreen(
         reservation: state.extra as ReservationModel,
       ),
     ),
+
     GoRoute(
       path: AppRoutes.ticketDetails,
       builder: (context, state) => TicketDetailsScreen(
         reservation: state.extra as ReservationModel,
       ),
     ),
+
     GoRoute(
       path: AppRoutes.refundRequest,
       builder: (context, state) => RefundRequestScreen(
         reservation: state.extra as ReservationModel,
       ),
     ),
+
     GoRoute(
       path: AppRoutes.history,
       builder: (context, state) => const HistoryScreen(),
     ),
+
     GoRoute(
       path: AppRoutes.trackingDetail,
       builder: (context, state) => TrackingDetailScreen(
         reservation: state.extra as ReservationModel,
       ),
     ),
+
     GoRoute(
       path: AppRoutes.rating,
       builder: (context, state) => RatingScreen(
         reservation: state.extra as ReservationModel,
       ),
     ),
+
+    // =========================================================
+    // COLIS CLIENT
+    // =========================================================
+
     GoRoute(
       path: AppRoutes.clientColis,
       builder: (context, state) => const ClientColisListScreen(),
     ),
+
     GoRoute(
       path: AppRoutes.clientColisForm,
       builder: (context, state) => const ClientColisFormScreen(),
     ),
+
     GoRoute(
       path: AppRoutes.clientColisDetail,
       builder: (context, state) => ClientColisDetailScreen(
         colis: state.extra as ColisModel,
       ),
     ),
+
     GoRoute(
       path: AppRoutes.clientDemandesCollecte,
-      builder: (context, state) => const ClientDemandesCollecteScreen(),
+      builder: (context, state) =>
+          const ClientDemandesCollecteScreen(),
     ),
+
+    // =========================================================
+    // AGENCES
+    // =========================================================
+
     GoRoute(
       path: AppRoutes.clientAgences,
       builder: (context, state) => const AgencesScreen(),
     ),
+
     GoRoute(
       path: AppRoutes.clientAgenceDetail,
       builder: (context, state) => AgenceDetailScreen(
