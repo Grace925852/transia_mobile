@@ -116,33 +116,15 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
-  String _unauthorizedRoleMessage() {
-    switch (_expectedRole) {
-      case 'CHAUFFEUR':
-        return 'Ce compte n’est pas autorisé dans l’espace chauffeur.';
-      case 'LIVREUR':
-        return 'Ce compte n’est pas autorisé dans l’espace livreur.';
-      case 'CLIENT':
-      default:
-        return 'Ce compte n’est pas autorisé dans l’espace client.';
-    }
-  }
-
-  void _redirectToExpectedSpace() {
+  void _redirectToUserSpace(AuthResponse user) {
     if (!mounted) return;
 
-    switch (_expectedRole) {
-      case 'CHAUFFEUR':
-        context.go(AppRoutes.chauffeur);
-        break;
-      case 'LIVREUR':
-        context.go(AppRoutes.livreur);
-        break;
-      case 'CLIENT':
-        context.go(AppRoutes.client);
-        break;
-      default:
-        throw Exception('Rôle attendu non pris en charge : $_expectedRole');
+    if (_hasRole(user, 'CHAUFFEUR')) {
+      context.go(AppRoutes.chauffeur);
+    } else if (_hasRole(user, 'LIVREUR')) {
+      context.go(AppRoutes.livreur);
+    } else {
+      context.go(AppRoutes.client);
     }
   }
 
@@ -174,11 +156,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      if (!_hasRole(user, _expectedRole)) {
-        await authService.logout();
-        throw Exception(_unauthorizedRoleMessage());
-      }
-
       showMessage(
         tr(
           fr: 'Bienvenue ${user.fullName}',
@@ -188,7 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
 
-      _redirectToExpectedSpace();
+      _redirectToUserSpace(user);
     } catch (e) {
       showMessage(e.toString().replaceAll('Exception: ', ''));
     } finally {
@@ -464,8 +441,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget buildLoginForm(BuildContext context) {
     final theme = Theme.of(context);
-    final titleColor =
-        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
     final subtitleColor =
         theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
 
@@ -777,123 +752,129 @@ Widget _buildLogo() {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: primaryBlue,
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              flex: 4,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 22),
-                child: Column(
-                  children: [
-                    const Spacer(),
-                    Center(
-                      child: Column(
-                        children: [
-                          _buildLogo(),
-                          const SizedBox(height: 22),
-                          const Text(
-                            'Transia',
-                            style: TextStyle(
-                              fontSize: 38,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            tr(
-                              fr: 'Transport intelligent pour tous',
-                              en: 'Smart transport for everyone',
-                              es: 'Transporte inteligente para todos',
-                              ar: 'نقل ذكي للجميع',
-                            ),
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.white.withValues(alpha: 0.88),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-                  ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
                 ),
-              ),
-            ),
-            Expanded(
-              flex: 6,
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: pageBackground,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(34),
-                    topRight: Radius.circular(34),
+                child: IntrinsicHeight(
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              _buildLogo(),
+                              const SizedBox(height: 14),
+                              const Text(
+                                'Transia',
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                tr(
+                                  fr: 'Transport intelligent pour tous',
+                                  en: 'Smart transport for everyone',
+                                  es: 'Transporte inteligente para todos',
+                                  ar: 'نقل ذكي للجميع',
+                                ),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white.withValues(alpha: 0.88),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: pageBackground,
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(34),
+                              topRight: Radius.circular(34),
+                            ),
+                          ),
+                          padding: const EdgeInsets.fromLTRB(22, 28, 22, 28),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              buildModeSwitcher(context),
+                              const SizedBox(height: 18),
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: cardColor,
+                                  borderRadius: BorderRadius.circular(28),
+                                ),
+                                child: (!widget.allowRegistration || isLoginMode)
+                                    ? buildLoginForm(context)
+                                    : buildRegisterForm(context),
+                              ),
+                              if (widget.allowRegistration)
+                                const SizedBox(height: 14),
+                              if (widget.allowRegistration && isLoginMode)
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      isLoginMode = false;
+                                    });
+                                  },
+                                  child: Text(
+                                    tr(
+                                      fr: 'Vous n’avez pas de compte ? Inscrivez-vous',
+                                      en: 'Don’t have an account? Sign up',
+                                      es: '¿No tiene cuenta? Regístrese',
+                                      ar: 'ليس لديك حساب؟ أنشئ حسابًا',
+                                    ),
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white70 : textColor,
+                                    ),
+                                  ),
+                                )
+                              else if (widget.allowRegistration)
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      isLoginMode = true;
+                                    });
+                                  },
+                                  child: Text(
+                                    tr(
+                                      fr: 'Vous avez déjà un compte ? Connectez-vous',
+                                      en: 'Already have an account? Sign in',
+                                      es: '¿Ya tiene cuenta? Inicie sesión',
+                                      ar: 'لديك حساب بالفعل؟ سجّل الدخول',
+                                    ),
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white70 : textColor,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 28, 22, 28),
-                  children: [
-                    buildModeSwitcher(context),
-                    const SizedBox(height: 18),
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      child: (!widget.allowRegistration || isLoginMode)
-                          ? buildLoginForm(context)
-                          : buildRegisterForm(context),
-                    ),
-                    if (widget.allowRegistration)
-                      const SizedBox(height: 14),
-                    if (widget.allowRegistration && isLoginMode)
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            isLoginMode = false;
-                          });
-                        },
-                        child: Text(
-                          tr(
-                            fr: 'Vous n’avez pas de compte ? Inscrivez-vous',
-                            en: 'Don’t have an account? Sign up',
-                            es: '¿No tiene cuenta? Regístrese',
-                            ar: 'ليس لديك حساب؟ أنشئ حسابًا',
-                          ),
-                          style: TextStyle(
-                            color: isDark ? Colors.white70 : textColor,
-                          ),
-                        ),
-                      )
-                    else if (widget.allowRegistration)
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            isLoginMode = true;
-                          });
-                        },
-                        child: Text(
-                          tr(
-                            fr: 'Vous avez déjà un compte ? Connectez-vous',
-                            en: 'Already have an account? Sign in',
-                            es: '¿Ya tiene cuenta? Inicie sesión',
-                            ar: 'لديك حساب بالفعل؟ سجّل الدخول',
-                          ),
-                          style: TextStyle(
-                            color: isDark ? Colors.white70 : textColor,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );

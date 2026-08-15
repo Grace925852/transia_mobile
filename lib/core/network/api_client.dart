@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:transia_mobile/app/routes.dart';
 import 'package:transia_mobile/core/constants/api_constants.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 
@@ -46,7 +47,7 @@ class ApiClient {
 
           return handler.next(options);
         },
-        onError: (error, handler) {
+        onError: (error, handler) async {
           if (kDebugMode) {
             debugPrint(
               'API ERROR => '
@@ -69,6 +70,23 @@ class ApiClient {
             debugPrint(
               'DETAIL => ${error.error}',
             );
+          }
+
+          final statusCode = error.response?.statusCode;
+          if (statusCode == 401 && !_isPublicEndpoint(error.requestOptions.path)) {
+            debugPrint( 
+              'ApiClient: 401 décelé (session expirée/invalide), déconnexion et redirection...',
+            );
+            final roles = await _secureStorageService.getRoles();
+            await _secureStorageService.clearSession();
+
+            if (roles.contains('CHAUFFEUR')) {
+              appRouter.go(AppRoutes.chauffeurLogin);
+            } else if (roles.contains('LIVREUR')) {
+              appRouter.go(AppRoutes.livreurLogin);
+            } else {
+              appRouter.go(AppRoutes.login);
+            }
           }
 
           return handler.next(error);

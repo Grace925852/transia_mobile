@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:transia_mobile/features/livreur/screens/livreur_colis_list_screen.dart';
 import 'package:transia_mobile/features/livreur/screens/livreur_home_screen.dart';
 import 'package:transia_mobile/features/livreur/screens/livreur_profile_screen.dart';
+import 'package:transia_mobile/features/livreur/screens/livreur_tournees_screen.dart';
 
 class LivreurMainScreen extends StatefulWidget {
   final int initialIndex;
@@ -23,6 +24,7 @@ class _LivreurMainScreenState extends State<LivreurMainScreen> {
     _selectedIndex = widget.initialIndex;
     _pages = const [
       LivreurHomeScreen(),
+      LivreurTourneesScreen(),
       LivreurColisListScreen(),
       LivreurProfileScreen(),
     ];
@@ -70,9 +72,14 @@ class _LivreurMainScreenState extends State<LivreurMainScreen> {
                 label: 'Accueil',
               ),
               BottomNavigationBarItem(
+                icon: Icon(Icons.alt_route_outlined),
+                activeIcon: Icon(Icons.alt_route_rounded),
+                label: 'Mes Tournées',
+              ),
+              BottomNavigationBarItem(
                 icon: Icon(Icons.inventory_2_outlined),
                 activeIcon: Icon(Icons.inventory_2_rounded),
-                label: 'Mes colis',
+                label: 'Livraisons',
               ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.person_outline_rounded),

@@ -22,6 +22,7 @@ class ApiConstants {
   static const String colis = '/api/v1/colis';
   static const String tarifsColis = '/api/v1/colis/tarifs';
   static const String demandesCollecte = '/api/v1/colis/collecte';
+  static const String tournees = '/api/v1/tournees';
 
   static const String chauffeurProblemes =
       '/api/v1/chauffeur-problemes';

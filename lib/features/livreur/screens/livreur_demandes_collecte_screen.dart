@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
 import 'package:transia_mobile/features/client/models/demande_collecte_model.dart';
@@ -148,6 +149,25 @@ class _LivreurDemandesCollecteScreenState
                                   Text('Agence : ${d.agenceNom}',
                                       style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
                                 ],
+                                const SizedBox(height: 10),
+                                 SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => _ouvrirGoogleMaps(d.adresseCollecte, d.latitude, d.longitude),
+                                    icon: const Icon(Icons.navigation_rounded, color: Color(0xFF10B981), size: 18),
+                                    label: Text(
+                                      d.latitude != null
+                                          ? '📍 Itinéraire GPS (${d.latitude!.toStringAsFixed(3)}, ${d.longitude!.toStringAsFixed(3)})'
+                                          : '🗺️ Voir l\'adresse sur Google Maps',
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF10B981)),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      side: const BorderSide(color: Color(0xFF10B981)),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
                           );
@@ -155,5 +175,18 @@ class _LivreurDemandesCollecteScreenState
                       ),
                     ),
     );
+  }
+
+  Future<void> _ouvrirGoogleMaps(String adresse, [double? lat, double? lng]) async {
+    final Uri url;
+    if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
+      url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+    } else {
+      final query = Uri.encodeComponent(adresse);
+      url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$query');
+    }
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    }
   }
 }
