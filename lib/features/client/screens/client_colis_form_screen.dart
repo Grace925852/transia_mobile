@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transia_mobile/core/network/api_client.dart';
 import 'package:transia_mobile/core/storage/secure_storage_service.dart';
@@ -24,6 +25,11 @@ class _ClientColisFormScreenState extends State<ClientColisFormScreen> {
   final _nomDestCtrl = TextEditingController();
   final _telDestCtrl = TextEditingController();
   final _adresseDestCtrl = TextEditingController();
+  final _adresseCollecteCtrl = TextEditingController();
+
+  double? _latitudeCollecte;
+  double? _longitudeCollecte;
+  bool _loadingGps = false;
 
   String _expediteurNom = '';
   String _expediteurTelephone = '';
@@ -73,7 +79,52 @@ class _ClientColisFormScreenState extends State<ClientColisFormScreen> {
     _nomDestCtrl.dispose();
     _telDestCtrl.dispose();
     _adresseDestCtrl.dispose();
+    _adresseCollecteCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _capturerPositionGPS() async {
+    setState(() { _loadingGps = true; });
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _snack('Veuillez activer la géolocalisation de votre téléphone.');
+        setState(() { _loadingGps = false; });
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _snack('Permission de localisation refusée.');
+          setState(() { _loadingGps = false; });
+          return;
+        }
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _latitudeCollecte = pos.latitude;
+        _longitudeCollecte = pos.longitude;
+        _loadingGps = false;
+      });
+
+      if (_adresseCollecteCtrl.text.trim().isEmpty) {
+        _adresseCollecteCtrl.text = 'Position GPS : ${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)}';
+      }
+
+      _snack('📍 Position GPS capturée avec succès !');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _loadingGps = false; });
+      _snack('Erreur lors de la détection GPS.');
+    }
   }
 
   Future<void> _recalculerEstimation() async {
@@ -128,6 +179,13 @@ class _ClientColisFormScreenState extends State<ClientColisFormScreen> {
       return;
     }
 
+    if (_collecteDomicile &&
+        _adresseCollecteCtrl.text.trim().isEmpty &&
+        _latitudeCollecte == null) {
+      _snack('Veuillez fournir une adresse ou capturer votre position GPS pour la collecte à domicile.');
+      return;
+    }
+
     setState(() { _loading = true; });
 
     try {
@@ -148,6 +206,9 @@ class _ClientColisFormScreenState extends State<ClientColisFormScreen> {
         agenceDepartId: _agenceDepartId!,
         agenceArriveeId: _agenceArriveeId!,
         collecteDomicile: _collecteDomicile,
+        adresseCollecte: _collecteDomicile ? _adresseCollecteCtrl.text.trim() : null,
+        latitudeCollecte: _collecteDomicile ? _latitudeCollecte : null,
+        longitudeCollecte: _collecteDomicile ? _longitudeCollecte : null,
       );
 
       await _colisService.enregistrerColis(request);
@@ -298,17 +359,59 @@ class _ClientColisFormScreenState extends State<ClientColisFormScreen> {
                 ),
                 const SizedBox(height: 12),
                 _Section(
-                  title: 'Collecte',
-                  icon: Icons.home_work_outlined,
+                  title: 'Mode de dépôt du colis',
+                  icon: Icons.unarchive_rounded,
                   children: [
-                    _CheckboxRow(
+                    _RadioGroup<bool>(
                       value: _collecteDomicile,
-                      label: 'Faire collecter ce colis à mon domicile',
+                      options: const [
+                        (false, '🏢 Dépôt en agence (Je l\'apporte moi-même)'),
+                        (true, '🏠 Collecte à domicile (Un livreur passe chez moi)'),
+                      ],
                       onChanged: (v) {
                         setState(() => _collecteDomicile = v);
                         _recalculerEstimation();
                       },
                     ),
+                    if (_collecteDomicile) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: _loadingGps ? null : _capturerPositionGPS,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: _loadingGps
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2),
+                                )
+                              : const Icon(Icons.my_location_rounded, size: 20),
+                          label: Text(
+                            _latitudeCollecte != null
+                                ? '📍 GPS capturé (${_latitudeCollecte!.toStringAsFixed(4)}, ${_longitudeCollecte!.toStringAsFixed(4)})'
+                                : '📍 Capturer ma position GPS actuelle',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _Field(
+                        label: 'Adresse de ramassage / Repères *',
+                        controller: _adresseCollecteCtrl,
+                        hint:
+                            'Ex: Quartier Hedzranawoe, Rue 124, près de la pharmacie',
+                      ),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -613,13 +716,18 @@ class _RadioGroup<T> extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Text(opt.$2,
+                Expanded(
+                  child: Text(
+                    opt.$2,
                     style: TextStyle(
-                        fontSize: 14,
-                        color: textColor,
-                        fontWeight: selected
-                            ? FontWeight.w600
-                            : FontWeight.normal)),
+                      fontSize: 14,
+                      color: textColor,
+                      fontWeight: selected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

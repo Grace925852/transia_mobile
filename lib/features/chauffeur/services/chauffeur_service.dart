@@ -327,4 +327,32 @@ class ChauffeurService {
       rethrow;
     }
   }
+
+  Future<Map<String, dynamic>?> getColisByNumeroSuivi(String rawCode) async {
+    try {
+      String code = rawCode.trim();
+      if (code.contains('/suivi/')) {
+        code = code.split('/suivi/').last;
+      }
+
+      final response = await apiClient.dio.get('/api/v1/colis/suivi/$code');
+      if (response.data is Map) {
+        return Map<String, dynamic>.from(response.data as Map);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>> chargerColis({
+    required String colisId,
+    required String tripId,
+  }) async {
+    final response = await apiClient.dio.put(
+      '/api/v1/colis/$colisId/charger',
+      queryParameters: {'trajetId': tripId},
+    );
+    return Map<String, dynamic>.from(response.data as Map);
+  }
 }

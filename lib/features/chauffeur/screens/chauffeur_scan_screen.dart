@@ -30,6 +30,7 @@ class _ChauffeurScanScreenState extends State<ChauffeurScanScreen> {
 
   bool isProcessing = false;
   ChauffeurPassengerModel? foundPassenger;
+  Map<String, dynamic>? foundColis;
   String? errorMessage;
 
   @override
@@ -64,8 +65,10 @@ class _ChauffeurScanScreenState extends State<ChauffeurScanScreen> {
       isProcessing = true;
       errorMessage = null;
       foundPassenger = null;
+      foundColis = null;
     });
 
+    // 1. Vérifier si c'est un billet passager dans la liste du trajet
     final passenger = _findPassengerByQr(rawValue);
 
     if (!mounted) return;
@@ -78,9 +81,44 @@ class _ChauffeurScanScreenState extends State<ChauffeurScanScreen> {
       return;
     }
 
-    // Le billet ne fait pas partie de la liste locale de ce trajet : on interroge le backend
-    // (lecture seule) pour savoir s'il s'agit d'un QR totalement inconnu, d'un billet d'un autre
-    // trajet (passé ou à venir), ou d'un billet de ce trajet mais pas encore payé/déjà utilisé.
+    // 2. Vérifier si c'est un Colis (QR Code ou numéro de suivi TRS-XXXXXX)
+    try {
+      final colis = await chauffeurService.getColisByNumeroSuivi(rawValue);
+      if (!mounted) return;
+
+      if (colis != null) {
+        final colisTrajetId = colis['trajetId']?.toString();
+        if (colisTrajetId != null &&
+            colisTrajetId.isNotEmpty &&
+            colisTrajetId != widget.trip.id) {
+          final infoTrajet = colis['trajetInfo'] ?? 'autre car';
+          setState(() {
+            errorMessage =
+                '⚠️ Ce colis est déjà attribué à un autre trajet ($infoTrajet). L\'embarquement dans ce car n\'est pas autorisé.';
+            isProcessing = false;
+          });
+          return;
+        }
+
+        final statut = colis['statut']?.toString() ?? '';
+        if (statut == 'EN_ATTENTE_DEPOT') {
+          setState(() {
+            errorMessage =
+                '⚠️ Ce colis n\'a pas encore été pèsé et payé en agence. Embarquement refusé.';
+            isProcessing = false;
+          });
+          return;
+        }
+
+        setState(() {
+          foundColis = colis;
+          isProcessing = false;
+        });
+        return;
+      }
+    } catch (_) {}
+
+    // 3. Sinon, interroger le backend pour voir s'il s'agit d'un billet d'un autre trajet
     try {
       final lookup = await chauffeurService.lookupBilletByQr(
         rawValue.trim(),
@@ -97,9 +135,56 @@ class _ChauffeurScanScreenState extends State<ChauffeurScanScreen> {
 
       setState(() {
         errorMessage =
-            'QR invalide : ce billet est introuvable dans le système.';
+            'QR invalide : ce code est introuvable (ni billet passager, ni colis).';
         isProcessing = false;
       });
+    }
+  }
+
+  Future<void> chargerFoundColis() async {
+    final colis = foundColis;
+    if (colis == null) return;
+
+    final id = colis['id']?.toString();
+    if (id == null || id.isEmpty) return;
+
+    setState(() {
+      isProcessing = true;
+    });
+
+    try {
+      final updated = await chauffeurService.chargerColis(
+        colisId: id,
+        tripId: widget.trip.id,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        foundColis = updated;
+        isProcessing = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '📦 Colis ${colis['numeroSuivi']} chargé en soute avec succès !'),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isProcessing = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors du chargement : ${e.toString()}'),
+          backgroundColor: const Color(0xFFEF4444),
+        ),
+      );
     }
   }
 
@@ -309,6 +394,115 @@ class _ChauffeurScanScreenState extends State<ChauffeurScanScreen> {
                       ),
                     ),
                   ),
+                ],
+              ),
+            )
+          else if (foundColis != null)
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: const Color(0xFF3B82F6), width: 1.5),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.inventory_2, color: Color(0xFF2563EB)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Colis Fret : ${foundColis!['numeroSuivi'] ?? ''}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  _InfoRow(
+                      label: 'Contenu',
+                      value: foundColis!['description']?.toString() ?? '—'),
+                  _InfoRow(
+                      label: 'Poids réel',
+                      value: foundColis!['poidsReel'] != null
+                          ? '${foundColis!['poidsReel']} kg'
+                          : 'Non pesé'),
+                  _InfoRow(
+                      label: 'Expéditeur',
+                      value:
+                          '${foundColis!['expediteurNom'] ?? ''} (${foundColis!['expediteurTelephone'] ?? ''})'),
+                  _InfoRow(
+                      label: 'Destinataire',
+                      value:
+                          '${foundColis!['destinataireNom'] ?? ''} (${foundColis!['destinataireTelephone'] ?? ''})'),
+                  _InfoRow(
+                      label: 'Agence départ',
+                      value:
+                          foundColis!['agenceDepartNom']?.toString() ?? '—'),
+                  _InfoRow(
+                      label: 'Agence arrivée',
+                      value:
+                          foundColis!['agenceArriveeNom']?.toString() ?? '—'),
+                  _InfoRow(
+                    label: 'Statut',
+                    value: foundColis!['statut']?.toString() ?? 'INCONNU',
+                  ),
+                  const SizedBox(height: 14),
+                  if (foundColis!['statut'] == 'DEPOSE_EN_AGENCE')
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        onPressed: chargerFoundColis,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF10B981),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        icon: const Icon(Icons.archive),
+                        label: const Text(
+                          '📦 Charger en soute (Valider)',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    )
+                  else if (foundColis!['statut'] == 'EN_TRANSIT')
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFECFDF5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Color(0xFF059669)),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Ce colis est déjà chargé à bord de ce car (En transit).',
+                              style: TextStyle(
+                                  color: Color(0xFF047857),
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Text(
+                      'Statut du colis : ${foundColis!['statut']}',
+                      style: const TextStyle(color: Color(0xFF64748B)),
+                    ),
                 ],
               ),
             )

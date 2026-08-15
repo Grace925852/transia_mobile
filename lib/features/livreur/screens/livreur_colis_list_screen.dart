@@ -52,10 +52,8 @@ class _LivreurColisListScreenState extends State<LivreurColisListScreen>
   }
 
   List<LivreurColisModel> get _aLivrer => _tous.where((c) =>
-      c.statut != StatutColis.livre &&
-      c.statut != StatutColis.annule &&
-      c.statut != StatutColis.retourne &&
-      c.statut != StatutColis.perdu).toList();
+      c.statut == StatutColis.arriveEnAgence ||
+      c.statut == StatutColis.enCoursLivraison).toList();
 
   List<LivreurColisModel> get _historique => _tous.where((c) =>
       c.statut == StatutColis.livre ||
@@ -82,21 +80,21 @@ class _LivreurColisListScreenState extends State<LivreurColisListScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Mes Livraisons',
+                        Text('Livraisons à Domicile',
                             style: TextStyle(
-                                fontSize: 26, fontWeight: FontWeight.w800,
+                                fontSize: 24, fontWeight: FontWeight.w800,
                                 color: theme.textTheme.bodyLarge?.color)),
                         const SizedBox(height: 4),
-                        Text('${_tous.length} colis au total',
+                        Text('${_aLivrer.length} colis prêt(s) à être livré(s)',
                             style: const TextStyle(
                                 fontSize: 13, color: Color(0xFF6B7280))),
                       ],
                     ),
                   ),
                   IconButton(
-                    onPressed: () => context.push(AppRoutes.livreurDemandesCollecte),
-                    icon: const Icon(Icons.home_work_outlined),
-                    tooltip: 'Collectes à effectuer',
+                    onPressed: _charger,
+                    icon: const Icon(Icons.refresh_rounded),
+                    tooltip: 'Actualiser',
                     style: IconButton.styleFrom(
                       backgroundColor: const Color(0xFF3158F5).withValues(alpha: 0.1),
                       foregroundColor: const Color(0xFF3158F5),
@@ -188,6 +186,7 @@ class _ColisListView extends StatelessWidget {
       case StatutColis.retourne:
       case StatutColis.perdu:
       case StatutColis.annule:           return const Color(0xFFEF4444);
+      case StatutColis.enAttenteCollecte:
       case StatutColis.enAttenteDepot:   return const Color(0xFFF59E0B);
     }
   }

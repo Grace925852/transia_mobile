@@ -2,6 +2,10 @@ class TrajetModel {
   final String id;
   final String villeDepart;
   final String villeArrivee;
+  final String? agenceDepartNom;
+  final String? agenceDepartAdresse;
+  final String? agenceArriveeNom;
+  final String? agenceArriveeAdresse;
   final String vehiculeImmatriculation;
   final String? vehiculeImage;
   final double distance;
@@ -16,6 +20,10 @@ class TrajetModel {
     required this.id,
     required this.villeDepart,
     required this.villeArrivee,
+    this.agenceDepartNom,
+    this.agenceDepartAdresse,
+    this.agenceArriveeNom,
+    this.agenceArriveeAdresse,
     required this.vehiculeImmatriculation,
     required this.vehiculeImage,
     required this.distance,
@@ -31,6 +39,8 @@ class TrajetModel {
     final villeDepartData = json['villeDepart'];
     final villeArriveeData = json['villeArrivee'];
     final vehiculeData = json['vehicule'];
+    final agenceDepartData = json['agenceDepart'];
+    final agenceArriveeData = json['agenceArrivee'];
 
     int parsedCapacite = 0;
 
@@ -48,6 +58,24 @@ class TrajetModel {
           int.tryParse(json['nombrePlaces']?.toString() ?? '0') ?? 0;
     }
 
+    String? parsedAgenceDepartNom;
+    String? parsedAgenceDepartAdresse;
+    if (agenceDepartData is Map) {
+      parsedAgenceDepartNom = agenceDepartData['nom']?.toString();
+      parsedAgenceDepartAdresse = agenceDepartData['adresse']?.toString();
+    }
+    parsedAgenceDepartNom ??= json['agenceDepartNom']?.toString() ?? json['agenceNom']?.toString();
+    parsedAgenceDepartAdresse ??= json['agenceDepartAdresse']?.toString();
+
+    String? parsedAgenceArriveeNom;
+    String? parsedAgenceArriveeAdresse;
+    if (agenceArriveeData is Map) {
+      parsedAgenceArriveeNom = agenceArriveeData['nom']?.toString();
+      parsedAgenceArriveeAdresse = agenceArriveeData['adresse']?.toString();
+    }
+    parsedAgenceArriveeNom ??= json['agenceArriveeNom']?.toString();
+    parsedAgenceArriveeAdresse ??= json['agenceArriveeAdresse']?.toString();
+
     return TrajetModel(
       id: json['id']?.toString() ?? '',
       villeDepart: villeDepartData is Map
@@ -60,6 +88,10 @@ class TrajetModel {
           : json['villeArriveeNom']?.toString() ??
               json['nomVilleArrivee']?.toString() ??
               '',
+      agenceDepartNom: parsedAgenceDepartNom,
+      agenceDepartAdresse: parsedAgenceDepartAdresse,
+      agenceArriveeNom: parsedAgenceArriveeNom,
+      agenceArriveeAdresse: parsedAgenceArriveeAdresse,
       vehiculeImmatriculation: vehiculeData is Map
           ? vehiculeData['immatriculation']?.toString() ?? ''
           : json['vehiculeImmatriculation']?.toString() ??

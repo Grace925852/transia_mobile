@@ -33,6 +33,11 @@ class ReservationService {
       debugPrint('CREATE RESERVATION DIO DATA = ${e.response?.data}');
       debugPrint('CREATE RESERVATION DIO MESSAGE = ${e.message}');
 
+      final statusCode = e.response?.statusCode;
+      if (statusCode == 401 || statusCode == 403) {
+        throw Exception('Session expirée ou utilisateur non reconnu. Veuillez vous re-connecter.');
+      }
+
       final responseData = e.response?.data;
 
       if (responseData is Map<String, dynamic>) {

@@ -52,6 +52,7 @@ class _ClientColisListScreenState extends State<ClientColisListScreen> {
       case StatutColis.retourne:
       case StatutColis.perdu:
       case StatutColis.annule:            return const Color(0xFFEF4444);
+      case StatutColis.enAttenteCollecte:
       case StatutColis.enAttenteDepot:    return const Color(0xFFF59E0B);
     }
   }
@@ -91,16 +92,6 @@ class _ClientColisListScreenState extends State<ClientColisListScreen> {
                       ],
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => context.push(AppRoutes.clientDemandesCollecte),
-                    icon: const Icon(Icons.home_work_outlined),
-                    tooltip: 'Collectes à domicile',
-                    style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xFF3158F5).withValues(alpha: 0.1),
-                      foregroundColor: const Color(0xFF3158F5),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
                   ElevatedButton.icon(
                     onPressed: () async {
                       await context.push(AppRoutes.clientColisForm);
@@ -236,6 +227,33 @@ class _ColisCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (colis.livreurNom != null && colis.livreurNom!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.two_wheeler_rounded, size: 16, color: Color(0xFF10B981)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Livreur assigné : ${colis.livreurNom}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF047857),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (colis.agenceDepartNom != null || colis.agenceArriveeNom != null) ...[
               const SizedBox(height: 10),
               const Divider(height: 1),

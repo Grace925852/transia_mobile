@@ -8,6 +8,7 @@ enum TranchePoids {
 
 enum StatutColis {
   enAttenteDepot,
+  enAttenteCollecte,
   deposeEnAgence,
   enTransit,
   arriveEnAgence,
@@ -63,6 +64,7 @@ String trancheLabel(TranchePoids t) {
 StatutColis statutColisFromJson(String? v) {
   switch (v) {
     case 'EN_ATTENTE_DEPOT': return StatutColis.enAttenteDepot;
+    case 'EN_ATTENTE_COLLECTE': return StatutColis.enAttenteCollecte;
     case 'DEPOSE_EN_AGENCE': return StatutColis.deposeEnAgence;
     case 'EN_TRANSIT': return StatutColis.enTransit;
     case 'ARRIVE_EN_AGENCE': return StatutColis.arriveEnAgence;
@@ -78,6 +80,7 @@ StatutColis statutColisFromJson(String? v) {
 String statutColisLabel(StatutColis s) {
   switch (s) {
     case StatutColis.enAttenteDepot: return 'En attente de dépôt';
+    case StatutColis.enAttenteCollecte: return 'En attente de collecte';
     case StatutColis.deposeEnAgence: return 'Déposé en agence';
     case StatutColis.enTransit: return 'En transit';
     case StatutColis.arriveEnAgence: return 'Arrivé en agence';
@@ -149,6 +152,7 @@ class ColisModel {
   final String? dateLivraison;
   final String? agenceDepartNom;
   final String? agenceArriveeNom;
+  final String? livreurNom;
   final String? qrCode;
 
   const ColisModel({
@@ -174,6 +178,7 @@ class ColisModel {
     this.dateLivraison,
     this.agenceDepartNom,
     this.agenceArriveeNom,
+    this.livreurNom,
     this.qrCode,
   });
 
@@ -201,6 +206,7 @@ class ColisModel {
       dateLivraison: json['dateLivraison']?.toString(),
       agenceDepartNom: json['agenceDepartNom']?.toString(),
       agenceArriveeNom: json['agenceArriveeNom']?.toString(),
+      livreurNom: json['livreurNom']?.toString(),
       qrCode: json['qrCode']?.toString(),
     );
   }
@@ -219,6 +225,9 @@ class ColisRequest {
   final String agenceDepartId;
   final String agenceArriveeId;
   final bool collecteDomicile;
+  final String? adresseCollecte;
+  final double? latitudeCollecte;
+  final double? longitudeCollecte;
 
   const ColisRequest({
     required this.description,
@@ -233,6 +242,9 @@ class ColisRequest {
     required this.agenceDepartId,
     required this.agenceArriveeId,
     this.collecteDomicile = false,
+    this.adresseCollecte,
+    this.latitudeCollecte,
+    this.longitudeCollecte,
   });
 
   Map<String, dynamic> toJson() {
@@ -249,6 +261,9 @@ class ColisRequest {
       'agenceDepartId': agenceDepartId,
       'agenceArriveeId': agenceArriveeId,
       'collecteDomicile': collecteDomicile,
+      if (adresseCollecte != null) 'adresseCollecte': adresseCollecte,
+      if (latitudeCollecte != null) 'latitudeCollecte': latitudeCollecte,
+      if (longitudeCollecte != null) 'longitudeCollecte': longitudeCollecte,
     };
   }
 }

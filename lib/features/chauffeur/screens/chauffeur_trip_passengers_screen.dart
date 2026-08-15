@@ -41,6 +41,10 @@ class _ChauffeurTripPassengersScreenState
   bool isSendingGps = false;
   bool isAddressLoading = false;
 
+  bool isLoadingColis = false;
+  String? colisError;
+  List<Map<String, dynamic>> colisList = [];
+
   bool hasChanged = false;
 
   String? passengersError;
@@ -54,6 +58,18 @@ class _ChauffeurTripPassengersScreenState
 
   List<ChauffeurPassengerModel> passengers = [];
   TripTrackingModel? tracking;
+
+  int get totalColisCount => colisList.length;
+  int get colisChargesCount => colisList
+      .where((c) =>
+          c['statut'] == 'EN_TRANSIT' ||
+          c['statut'] == 'ARRIVE_EN_AGENCE' ||
+          c['statut'] == 'LIVRE')
+      .length;
+  double get totalColisPoidsKg => colisList.fold(
+      0.0,
+      (sum, c) =>
+          sum + ((c['poidsReel'] as num?)?.toDouble() ?? 0.0));
 
   int get expectedCount => passengers.length;
 
@@ -103,6 +119,7 @@ class _ChauffeurTripPassengersScreenState
     await Future.wait([
       loadPassengers(),
       loadTracking(),
+      loadColis(),
     ]);
   }
 
@@ -110,6 +127,7 @@ class _ChauffeurTripPassengersScreenState
     await Future.wait([
       loadPassengers(),
       loadTracking(),
+      loadColis(),
     ]);
   }
 
@@ -178,8 +196,75 @@ class _ChauffeurTripPassengersScreenState
     }
   }
 
+  // ============================================================
+  // COLIS & FRET EN SOUTE
+  // ============================================================
+
+  Future<void> loadColis() async {
+    if (!mounted) return;
+    setState(() {
+      isLoadingColis = true;
+      colisError = null;
+    });
+
+    try {
+      final response =
+          await apiClient.dio.get('/api/v1/colis/trajet/${widget.trip.id}');
+      if (!mounted) return;
+
+      if (response.data is List) {
+        final list = (response.data as List)
+            .where((e) => e is Map)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+
+        setState(() {
+          colisList = list;
+          isLoadingColis = false;
+        });
+      } else {
+        setState(() {
+          colisList = [];
+          isLoadingColis = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        isLoadingColis = false;
+        colisError = _cleanError(e);
+      });
+    }
+  }
+
+  Future<void> chargerColisItem(String colisId) async {
+    try {
+      final updated = await chauffeurService.chargerColis(
+        colisId: colisId,
+        tripId: widget.trip.id,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        colisList = colisList.map((c) {
+          if (c['id']?.toString() == colisId) {
+            return updated;
+          }
+          return c;
+        }).toList();
+        hasChanged = true;
+      });
+
+      _showMessage('📦 Colis chargé en soute avec succès !');
+    } catch (e) {
+      if (!mounted) return;
+      _showMessage('Erreur : ${_cleanError(e)}');
+    }
+  }
+
   Future<void> openScanScreen() async {
-    final result = await context.push(
+    await context.push(
       AppRoutes.chauffeurScan,
       extra: {
         'trip': widget.trip,
@@ -188,20 +273,7 @@ class _ChauffeurTripPassengersScreenState
     );
 
     if (!mounted) return;
-
-    if (result is String && result.isNotEmpty) {
-      await loadPassengers();
-
-      if (!mounted) return;
-
-      setState(() {
-        hasChanged = true;
-      });
-
-      _showMessage(
-        'Passager marqué présent avec succès.',
-      );
-    }
+    await refreshScreen();
   }
 
   Future<void> openReportProblemScreen() async {
@@ -1396,10 +1468,227 @@ class _ChauffeurTripPassengersScreenState
                       ),
                     ),
                   ),
+                const SizedBox(height: 28),
+                _buildColisSection(theme),
               ],
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildColisSection(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '📦 Fret & Colis en Soute',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF374151),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _CounterBox(
+                  label: 'Colis Total',
+                  value: totalColisCount,
+                  icon: Icons.inventory_2_outlined,
+                  color: const Color(0xFF2563EB),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _CounterBox(
+                  label: 'En Soute',
+                  value: colisChargesCount,
+                  icon: Icons.archive_outlined,
+                  color: const Color(0xFF10B981),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _CounterBox(
+                  label: 'Poids (kg)',
+                  value: totalColisPoidsKg.toInt(),
+                  icon: Icons.scale_outlined,
+                  color: const Color(0xFF8B5CF6),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        if (isLoadingColis)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (colisError != null)
+          _ErrorCard(message: colisError!, onRetry: loadColis)
+        else if (colisList.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(20),
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Column(
+              children: [
+                Icon(Icons.inventory_2_outlined,
+                    size: 40, color: Color(0xFF9CA3AF)),
+                SizedBox(height: 8),
+                Text(
+                  'Aucun colis attribué à ce trajet pour le moment.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+                ),
+              ],
+            ),
+          )
+        else
+          ...colisList.map((colis) => _buildColisCard(colis, theme)),
+      ],
+    );
+  }
+
+  Widget _buildColisCard(Map<String, dynamic> colis, ThemeData theme) {
+    final statut = colis['statut']?.toString() ?? '';
+    final isEnSoute = statut == 'EN_TRANSIT' ||
+        statut == 'ARRIVE_EN_AGENCE' ||
+        statut == 'LIVRE';
+    final isPretACharger = statut == 'DEPOSE_EN_AGENCE';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: isEnSoute
+            ? Border.all(
+                color: const Color(0xFF10B981).withOpacity(0.4), width: 1.5)
+            : Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  colis['numeroSuivi'] ?? 'TRS-XXXXXX',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1D4ED8),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              if (colis['poidsReel'] != null)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3E8FF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${colis['poidsReel']} kg',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF7E22CE),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            colis['description']?.toString() ?? 'Sans description',
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Exp: ${colis['expediteurNom'] ?? '—'}  ➜  Dest: ${colis['destinataireNom'] ?? '—'} (${colis['destinataireTelephone'] ?? ''})',
+            style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+          ),
+          const SizedBox(height: 12),
+          if (isPretACharger)
+            SizedBox(
+              width: double.infinity,
+              height: 44,
+              child: ElevatedButton.icon(
+                onPressed: () => chargerColisItem(colis['id'].toString()),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: const Icon(Icons.archive_outlined, size: 18),
+                label: const Text(
+                  '📦 Charger en soute',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              ),
+            )
+          else if (isEnSoute)
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFECFDF5),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.check_circle_rounded,
+                      color: Color(0xFF059669), size: 18),
+                  SizedBox(width: 6),
+                  Text(
+                    'Colis chargé en soute (En transit)',
+                    style: TextStyle(
+                      color: Color(0xFF047857),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Text(
+              'Statut : $statut',
+              style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+            ),
+        ],
       ),
     );
   }

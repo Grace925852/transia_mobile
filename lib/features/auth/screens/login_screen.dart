@@ -8,7 +8,14 @@ import 'package:transia_mobile/features/auth/models/auth_response.dart';
 import 'package:transia_mobile/features/auth/services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final String expectedRole;
+  final bool allowRegistration;
+
+  const LoginScreen({
+    super.key,
+    required this.expectedRole,
+    this.allowRegistration = false,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -75,48 +82,50 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  bool _hasRole(AuthResponse r, String role) {
-    final upper = role.toUpperCase();
-    return r.roles.any((s) {
-      final u = s.toUpperCase();
-      return u == upper || u == 'ROLE_$upper';
+  String get _expectedRole => widget.expectedRole
+      .trim()
+      .toUpperCase()
+      .replaceFirst('ROLE_', '');
+
+  bool get _isClientPortal => _expectedRole == 'CLIENT';
+
+  String get _portalLabel {
+    switch (_expectedRole) {
+      case 'CHAUFFEUR':
+        return 'Espace Chauffeur';
+      case 'LIVREUR':
+        return 'Espace Livreur';
+      case 'CLIENT':
+      default:
+        return 'Espace Client';
+    }
+  }
+
+  bool _hasRole(AuthResponse response, String role) {
+    final expected = role
+        .trim()
+        .toUpperCase()
+        .replaceFirst('ROLE_', '');
+
+    return response.roles.any((item) {
+      final normalized = item
+          .trim()
+          .toUpperCase()
+          .replaceFirst('ROLE_', '');
+      return normalized == expected;
     });
   }
 
-  Future<void> _redirectByRole(AuthResponse user) async {
+  void _redirectToUserSpace(AuthResponse user) {
     if (!mounted) return;
-    final isChauffeur = _hasRole(user, 'CHAUFFEUR');
-    final isLivreur = _hasRole(user, 'LIVREUR');
 
-    if (isChauffeur && isLivreur) {
-      await _showRolePicker();
-    } else if (isChauffeur) {
+    if (_hasRole(user, 'CHAUFFEUR')) {
       context.go(AppRoutes.chauffeur);
-    } else if (isLivreur) {
+    } else if (_hasRole(user, 'LIVREUR')) {
       context.go(AppRoutes.livreur);
     } else {
       context.go(AppRoutes.client);
     }
-  }
-
-  Future<void> _showRolePicker() async {
-    if (!mounted) return;
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isDismissible: false,
-      enableDrag: false,
-      builder: (ctx) => _RolePickerSheet(
-        onChauffeur: () {
-          Navigator.of(ctx).pop();
-          context.go(AppRoutes.chauffeur);
-        },
-        onLivreur: () {
-          Navigator.of(ctx).pop();
-          context.go(AppRoutes.livreur);
-        },
-      ),
-    );
   }
 
   Future<void> login() async {
@@ -155,7 +164,8 @@ class _LoginScreenState extends State<LoginScreen> {
           ar: 'مرحبًا ${user.fullName}',
         ),
       );
-      await _redirectByRole(user);
+
+      _redirectToUserSpace(user);
     } catch (e) {
       showMessage(e.toString().replaceAll('Exception: ', ''));
     } finally {
@@ -166,6 +176,11 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> register() async {
+    if (!widget.allowRegistration || !_isClientPortal) {
+      showMessage('L’inscription est réservée aux comptes clients.');
+      return;
+    }
+
     final fullName = registerFullNameController.text.trim();
     final telephone = registerPhoneController.text.trim();
     final email = registerEmailController.text.trim();
@@ -325,6 +340,28 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget buildModeSwitcher(BuildContext context) {
     final theme = Theme.of(context);
+
+    if (!widget.allowRegistration) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
+        decoration: BoxDecoration(
+          color: theme.brightness == Brightness.dark
+              ? const Color(0xFF172554)
+              : const Color(0xFFF1F5FF),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          _portalLabel,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: theme.textTheme.bodyLarge?.color,
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+          ),
+        ),
+      );
+    }
     final textColor =
         theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
     final isDark = theme.brightness == Brightness.dark;
@@ -404,8 +441,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget buildLoginForm(BuildContext context) {
     final theme = Theme.of(context);
-    final titleColor =
-        theme.textTheme.bodyLarge?.color ?? const Color(0xFF374151);
     final subtitleColor =
         theme.textTheme.bodyMedium?.color ?? const Color(0xFF6B7280);
 
@@ -717,271 +752,132 @@ Widget _buildLogo() {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       backgroundColor: primaryBlue,
       body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              flex: 4,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 22),
-                child: Column(
-                  children: [
-                    const Spacer(),
-                    Center(
-                      child: Column(
-                        children: [
-                          _buildLogo(),
-                          const SizedBox(height: 22),
-                          const Text(
-                            'Transia',
-                            style: TextStyle(
-                              fontSize: 38,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            tr(
-                              fr: 'Transport intelligent pour tous',
-                              en: 'Smart transport for everyone',
-                              es: 'Transporte inteligente para todos',
-                              ar: 'نقل ذكي للجميع',
-                            ),
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.white.withValues(alpha: 0.88),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Spacer(),
-                  ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight,
                 ),
-              ),
-            ),
-            Expanded(
-              flex: 6,
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: pageBackground,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(34),
-                    topRight: Radius.circular(34),
+                child: IntrinsicHeight(
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              _buildLogo(),
+                              const SizedBox(height: 14),
+                              const Text(
+                                'Transia',
+                                style: TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                tr(
+                                  fr: 'Transport intelligent pour tous',
+                                  en: 'Smart transport for everyone',
+                                  es: 'Transporte inteligente para todos',
+                                  ar: 'نقل ذكي للجميع',
+                                ),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white.withValues(alpha: 0.88),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: pageBackground,
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(34),
+                              topRight: Radius.circular(34),
+                            ),
+                          ),
+                          padding: const EdgeInsets.fromLTRB(22, 28, 22, 28),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              buildModeSwitcher(context),
+                              const SizedBox(height: 18),
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: cardColor,
+                                  borderRadius: BorderRadius.circular(28),
+                                ),
+                                child: (!widget.allowRegistration || isLoginMode)
+                                    ? buildLoginForm(context)
+                                    : buildRegisterForm(context),
+                              ),
+                              if (widget.allowRegistration)
+                                const SizedBox(height: 14),
+                              if (widget.allowRegistration && isLoginMode)
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      isLoginMode = false;
+                                    });
+                                  },
+                                  child: Text(
+                                    tr(
+                                      fr: 'Vous n’avez pas de compte ? Inscrivez-vous',
+                                      en: 'Don’t have an account? Sign up',
+                                      es: '¿No tiene cuenta? Regístrese',
+                                      ar: 'ليس لديك حساب؟ أنشئ حسابًا',
+                                    ),
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white70 : textColor,
+                                    ),
+                                  ),
+                                )
+                              else if (widget.allowRegistration)
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      isLoginMode = true;
+                                    });
+                                  },
+                                  child: Text(
+                                    tr(
+                                      fr: 'Vous avez déjà un compte ? Connectez-vous',
+                                      en: 'Already have an account? Sign in',
+                                      es: '¿Ya tiene cuenta? Inicie sesión',
+                                      ar: 'لديك حساب بالفعل؟ سجّل الدخول',
+                                    ),
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white70 : textColor,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 28, 22, 28),
-                  children: [
-                    buildModeSwitcher(context),
-                    const SizedBox(height: 18),
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      child: isLoginMode
-                          ? buildLoginForm(context)
-                          : buildRegisterForm(context),
-                    ),
-                    const SizedBox(height: 14),
-                    if (isLoginMode)
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            isLoginMode = false;
-                          });
-                        },
-                        child: Text(
-                          tr(
-                            fr: 'Vous n’avez pas de compte ? Inscrivez-vous',
-                            en: 'Don’t have an account? Sign up',
-                            es: '¿No tiene cuenta? Regístrese',
-                            ar: 'ليس لديك حساب؟ أنشئ حسابًا',
-                          ),
-                          style: TextStyle(
-                            color: isDark ? Colors.white70 : textColor,
-                          ),
-                        ),
-                      )
-                    else
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            isLoginMode = true;
-                          });
-                        },
-                        child: Text(
-                          tr(
-                            fr: 'Vous avez déjà un compte ? Connectez-vous',
-                            en: 'Already have an account? Sign in',
-                            es: '¿Ya tiene cuenta? Inicie sesión',
-                            ar: 'لديك حساب بالفعل؟ سجّل الدخول',
-                          ),
-                          style: TextStyle(
-                            color: isDark ? Colors.white70 : textColor,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
   }
 }
 
-class _RolePickerSheet extends StatelessWidget {
-  final VoidCallback onChauffeur;
-  final VoidCallback onLivreur;
-
-  const _RolePickerSheet({
-    required this.onChauffeur,
-    required this.onLivreur,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final textColor = theme.textTheme.bodyLarge?.color ?? const Color(0xFF1E293B);
-    final subColor = theme.textTheme.bodyMedium?.color ?? const Color(0xFF64748B);
-
-    return Container(
-      margin: const EdgeInsets.all(16),
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: subColor.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Choisissez votre espace',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Votre compte a deux rôles actifs',
-            style: TextStyle(
-              fontSize: 13,
-              color: subColor,
-            ),
-          ),
-          const SizedBox(height: 24),
-          _SheetRoleButton(
-            icon: Icons.directions_bus_rounded,
-            label: 'Espace Chauffeur',
-            description: 'Gérez vos trajets et passagers',
-            color: const Color(0xFF7C3AED),
-            onTap: onChauffeur,
-          ),
-          const SizedBox(height: 12),
-          _SheetRoleButton(
-            icon: Icons.delivery_dining_rounded,
-            label: 'Espace Livreur',
-            description: 'Gérez vos tournées et livraisons',
-            color: const Color(0xFF059669),
-            onTap: onLivreur,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SheetRoleButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String description;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _SheetRoleButton({
-    required this.icon,
-    required this.label,
-    required this.description,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: color.withValues(alpha: 0.25)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: color, size: 26),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: color,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      description,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: color.withValues(alpha: 0.7),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.arrow_forward_ios_rounded, color: color, size: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

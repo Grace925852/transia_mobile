@@ -4,6 +4,7 @@ enum AssistantIntent {
   help,
   booking,
   parcel,
+  baggage,
   ticket,
   payment,
   tracking,
@@ -32,6 +33,9 @@ extension AssistantIntentExtension on AssistantIntent {
 
       case AssistantIntent.parcel:
         return 'Envoi de colis';
+
+      case AssistantIntent.baggage:
+        return 'Bagages';
 
       case AssistantIntent.ticket:
         return 'Billet';
@@ -66,6 +70,30 @@ extension AssistantIntentExtension on AssistantIntent {
     switch (this) {
       case AssistantIntent.booking:
       case AssistantIntent.parcel:
+      case AssistantIntent.ticket:
+      case AssistantIntent.payment:
+      case AssistantIntent.tracking:
+      case AssistantIntent.refund:
+      case AssistantIntent.reservations:
+      case AssistantIntent.history:
+      case AssistantIntent.profile:
+        return true;
+
+      case AssistantIntent.unknown:
+      case AssistantIntent.greeting:
+      case AssistantIntent.help:
+      case AssistantIntent.baggage:
+      case AssistantIntent.thanks:
+      case AssistantIntent.goodbye:
+        return false;
+    }
+  }
+
+  bool get isBusinessIntent {
+    switch (this) {
+      case AssistantIntent.booking:
+      case AssistantIntent.parcel:
+      case AssistantIntent.baggage:
       case AssistantIntent.ticket:
       case AssistantIntent.payment:
       case AssistantIntent.tracking:
