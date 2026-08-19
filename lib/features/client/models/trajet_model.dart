@@ -123,4 +123,29 @@ class TrajetModel {
     }
     return heureDepart;
   }
+
+  String get dateFormatee {
+    if (dateDepart.trim().isEmpty) return '';
+    try {
+      if (dateDepart.contains('-')) {
+        final parts = dateDepart.split('-');
+        if (parts.length == 3) {
+          final year = parts[0].length == 4 ? parts[0].substring(2) : parts[0];
+          return '${parts[2]}/${parts[1]}/$year';
+        }
+      }
+    } catch (_) {}
+    return dateDepart;
+  }
+
+  String get dateHeureFormatee {
+    final h = heureFormatee;
+    final d = dateFormatee;
+    if (d.isNotEmpty && h.isNotEmpty) {
+      return '$d à $h';
+    } else if (d.isNotEmpty) {
+      return d;
+    }
+    return h;
+  }
 }

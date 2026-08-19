@@ -151,20 +151,44 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
   List<_PassengerTicketData> _buildTicketData() {
     final passengers = _buildPassengerDisplayList();
     final seats = _extractSeatNumbers();
+    final billets = _extractBillets();
     final total = passengers.length;
 
     return List.generate(passengers.length, (index) {
       final seat = index < seats.length ? seats[index] : '-';
+      String? rawQrCode;
+      String? billetId;
+
+      if (index < billets.length) {
+        final b = billets[index];
+        final qr = (b['qrCode'] ?? b['qr_code'] ?? b['qrCodeValue'])?.toString().trim();
+        if (qr != null && qr.isNotEmpty) {
+          rawQrCode = qr;
+        }
+        final idStr = (b['id'] ?? b['publicId'])?.toString().trim();
+        if (idStr != null && idStr.isNotEmpty) {
+          billetId = idStr;
+        }
+      }
+
       return _PassengerTicketData(
         ticketIndex: index + 1,
         totalTickets: total,
         passengerName: passengers[index],
         seatNumber: seat,
+        rawQrCode: rawQrCode,
+        billetId: billetId,
       );
     });
   }
 
   String _buildQrDataForTicket(_PassengerTicketData ticket) {
+    if (ticket.rawQrCode != null && ticket.rawQrCode!.trim().isNotEmpty) {
+      return ticket.rawQrCode!.trim();
+    }
+    if (ticket.billetId != null && ticket.billetId!.trim().isNotEmpty) {
+      return ticket.billetId!.trim();
+    }
     return [
       'RESERVATION_ID:${widget.reservation.id}',
       'TICKET_INDEX:${ticket.ticketIndex}/${ticket.totalTickets}',
@@ -321,7 +345,7 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
                         children: [
                           pw.Expanded(
                             child: pw.Text(
-                              widget.reservation.trajetLabel,
+                              widget.reservation.trajetLabel.replaceAll('→', ' -> '),
                               style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
                               maxLines: 1,
                               overflow: pw.TextOverflow.clip,
@@ -736,12 +760,12 @@ class _TicketDetailsScreenState extends State<TicketDetailsScreen> {
           _buildInfoRow(
             context,
             tr(
-              fr: 'ID réservation',
-              en: 'Reservation ID',
-              es: 'ID reserva',
-              ar: 'معرف الحجز',
+              fr: 'Réf. réservation',
+              en: 'Reservation Ref.',
+              es: 'Ref. reserva',
+              ar: 'مرجع الحجز',
             ),
-            widget.reservation.id,
+            widget.reservation.displayReference,
           ),
         ],
       ),
@@ -820,11 +844,15 @@ class _PassengerTicketData {
   final int totalTickets;
   final String passengerName;
   final String seatNumber;
+  final String? rawQrCode;
+  final String? billetId;
 
   _PassengerTicketData({
     required this.ticketIndex,
     required this.totalTickets,
     required this.passengerName,
     required this.seatNumber,
+    this.rawQrCode,
+    this.billetId,
   });
 }

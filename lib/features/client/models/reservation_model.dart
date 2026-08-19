@@ -1,5 +1,6 @@
 class ReservationModel {
   final String id;
+  final String? reference;
   final String? userId;
   final String clientNom;
   final String trajetId;
@@ -17,6 +18,7 @@ class ReservationModel {
 
   ReservationModel({
     required this.id,
+    this.reference,
     required this.userId,
     required this.clientNom,
     required this.trajetId,
@@ -161,8 +163,11 @@ class ReservationModel {
     final int parsedBilletsCount =
         billetsData is List ? billetsData.length : safeNombrePlace;
 
+    final String? parsedRef = (json['reference'] ?? json['referenceMetier'])?.toString();
+
     return ReservationModel(
       id: (json['id'] ?? '').toString(),
+      reference: parsedRef,
       userId: parsedUserId,
       clientNom: parsedClientNom,
       trajetId: parsedTrajetId,
@@ -178,6 +183,16 @@ class ReservationModel {
       nombreBillets: parsedBilletsCount,
       rawData: json,
     );
+  }
+
+  String get displayReference {
+    if (reference != null && reference!.trim().isNotEmpty) {
+      return reference!.trim();
+    }
+    if (id.length >= 8) {
+      return 'RES-${id.substring(0, 8).toUpperCase()}';
+    }
+    return id;
   }
 
   String get prixFormate => '${montantTotal.toStringAsFixed(0)} FCFA';

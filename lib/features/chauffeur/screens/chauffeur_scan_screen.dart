@@ -42,15 +42,30 @@ class _ChauffeurScanScreenState extends State<ChauffeurScanScreen> {
   }
 
   ChauffeurPassengerModel? _findPassengerByQr(String rawValue) {
+    final cleanRaw = rawValue.trim();
+
     for (final passenger in widget.passengers) {
       if (passenger.qrCode.trim().isNotEmpty &&
-          passenger.qrCode.trim() == rawValue.trim()) {
+          passenger.qrCode.trim() == cleanRaw) {
         return passenger;
       }
     }
 
     for (final passenger in widget.passengers) {
-      if (passenger.billetId.trim() == rawValue.trim()) {
+      if (passenger.billetId.trim().isNotEmpty &&
+          passenger.billetId.trim() == cleanRaw) {
+        return passenger;
+      }
+    }
+
+    // Fallback pour les chaînes QR composées
+    for (final passenger in widget.passengers) {
+      if (passenger.billetId.trim().isNotEmpty &&
+          cleanRaw.contains(passenger.billetId.trim())) {
+        return passenger;
+      }
+      if (passenger.qrCode.trim().isNotEmpty &&
+          cleanRaw.contains(passenger.qrCode.trim())) {
         return passenger;
       }
     }

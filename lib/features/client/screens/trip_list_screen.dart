@@ -132,7 +132,7 @@ class TripListScreen extends StatelessWidget {
                             const SizedBox(height: 6),
                             _InfoRow(
                               icon: Icons.calendar_month_rounded,
-                              text: 'Date : ${trajet.dateDepart}',
+                              text: 'Date : ${trajet.dateFormatee.isEmpty ? trajet.dateDepart : trajet.dateFormatee}',
                             ),
                             const SizedBox(height: 6),
                             _InfoRow(

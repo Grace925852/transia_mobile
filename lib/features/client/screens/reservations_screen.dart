@@ -668,6 +668,7 @@ class _ReservationCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
+          _ReservationRow(label: 'Réf. réservation', value: reservation.displayReference),
           _ReservationRow(label: dateLabel, value: reservation.dateDepart),
           _ReservationRow(label: timeLabel, value: reservation.heureFormatee),
           _ReservationRow(

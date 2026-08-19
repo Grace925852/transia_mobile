@@ -260,23 +260,45 @@ class _ColisCard extends StatelessWidget {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  const Icon(Icons.circle, size: 8, color: Color(0xFF3158F5)),
-                  const SizedBox(width: 6),
-                  Text(colis.agenceDepartNom ?? '?',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 6),
-                    child: Icon(Icons.arrow_forward, size: 12, color: Color(0xFF9CA3AF)),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Icon(Icons.circle, size: 8, color: Color(0xFF3158F5)),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            colis.agenceDepartNom ?? '?',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                          ),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4),
+                          child: Icon(Icons.arrow_forward, size: 12, color: Color(0xFF9CA3AF)),
+                        ),
+                        const Icon(Icons.location_on, size: 10, color: Color(0xFF10B981)),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            colis.agenceArriveeNom ?? '?',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const Icon(Icons.location_on, size: 8, color: Color(0xFF10B981)),
-                  const SizedBox(width: 6),
-                  Text(colis.agenceArriveeNom ?? '?',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
-                  const Spacer(),
-                  Text(trancheLabel(colis.tranchePoids),
-                      style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w600,
-                          color: Color(0xFF374151))),
+                  const SizedBox(width: 8),
+                  Text(
+                    trancheLabel(colis.tranchePoids),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF374151),
+                    ),
+                  ),
                 ],
               ),
             ],

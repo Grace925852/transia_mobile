@@ -205,6 +205,12 @@ class _ClientHomeScreenState extends State<ClientHomeScreen> {
   }
 
   bool _isUpcomingTrajet(TrajetModel trajet) {
+    final status = trajet.statut.trim().toUpperCase();
+    if (status.contains('ANNUL') ||
+        status.contains('TERMIN') ||
+        status.contains('EXPIR')) {
+      return false;
+    }
     final dt = _parseTrajetDateTime(trajet);
     if (dt == null) return true;
     return dt.isAfter(DateTime.now());
@@ -1321,7 +1327,7 @@ class _TripCard extends StatelessWidget {
           _InfoLine(
             icon: Icons.access_time_rounded,
             iconColor: subtitleColor,
-            text: trajet.heureFormatee,
+            text: trajet.dateHeureFormatee,
             textColor: subtitleColor,
           ),
           const SizedBox(height: 4),
